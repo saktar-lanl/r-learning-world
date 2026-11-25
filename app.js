@@ -5,8 +5,8 @@ const app = document.getElementById('app');
 const STORE_KEY = 'ruhaimah-learning-v3';   // kept so existing progress carries over
 const LEGACY_KEY = 'ruhaimah-v1';
 const VOICE_KEY = 'ruhaimah-voice-settings';
-const defaultSave = {stars:0,stats:{},days:{},journal:'',dailyDone:{},resume:null,storiesRead:{},ttt:{win:0,lose:0,tie:0},stickers:0};
-const defaultVoice = {audio:true,sfx:true,autoRead:true,speed:.85,pitch:1.05,voiceURI:''};
+const defaultSave = {stickerBook:[],routine:null,stars:0,stats:{},days:{},journal:'',dailyDone:{},resume:null,storiesRead:{},ttt:{win:0,lose:0,tie:0},stickers:0};
+const defaultVoice = {mic:true,audio:true,sfx:true,autoRead:true,speed:.85,pitch:1.05,voiceURI:''};
 let saved = loadSaved();
 let voicePrefs = loadVoicePrefs();
 let currentQuiz = null;
@@ -29,7 +29,7 @@ function loadVoicePrefs(){
   // older versions stored a too-slow speed; keep within a friendly range
   p.speed = Math.min(1.15, Math.max(.6, Number(p.speed) || .85));
   p.pitch = Math.min(1.35, Math.max(.8, Number(p.pitch) || 1.05));
-  ['sfx','autoRead','audio'].forEach(k => { if (typeof p[k] !== 'boolean') p[k] = defaultVoice[k]; });
+  ['sfx','autoRead','audio','mic'].forEach(k => { if (typeof p[k] !== 'boolean') p[k] = defaultVoice[k]; });
   return p;
 }
 function saveAll(){
@@ -62,6 +62,7 @@ function toast(msg){
   clearTimeout(toast._id); toast._id = setTimeout(() => t.classList.remove('show'), 2300);
 }
 function show(html){
+  if (typeof Listen !== 'undefined') Listen.stop();
   app.innerHTML = html;
   window.scrollTo({top:0, behavior:'auto'});
 }
@@ -220,14 +221,8 @@ function flyStar(fromEl){
   setTimeout(() => s.remove(), 900);
 }
 function addStars(n, fromEl){
-  const before = Math.floor((saved.stars || 0) / 10);
   saved.stars = (saved.stars || 0) + n;
-  const after = Math.floor(saved.stars / 10);
   if (fromEl) flyStar(fromEl);
-  if (after > before){
-    const st = STICKERS[(after - 1) % STICKERS.length];
-    setTimeout(() => { toast(`🎁 New sticker unlocked: ${st}`); confetti(30); Sfx.win(); }, 500);
-  }
 }
 const DAILY = [
   {key:'reading', label:'Read a story', icon:'📖', subjects:['reading'], go:"openSubject('reading')"},
@@ -241,8 +236,6 @@ function markDaily(subject){
   const t = todayKey(); saved.dailyDone[t] = saved.dailyDone[t] || {};
   if (!saved.dailyDone[t][d.key]){
     saved.dailyDone[t][d.key] = true;
-    const all = DAILY.every(x => saved.dailyDone[t][x.key]);
-    if (all) setTimeout(() => { toast('🏆 Daily path complete! +3 bonus stars'); addStars(3); saveAll(); confetti(40); }, 900);
   }
 }
 function recordResult(subject, ok, fromEl){
@@ -255,7 +248,7 @@ function setResume(page){ stopSpeaking(); saved.resume = page; saveAll(); }
 
 /* ---------- subjects ---------- */
 const subjects = [
-  {key:'reading', emoji:'📚', title:'Reading & phonics', desc:'Picture stories, ABCs and sounds', color:'#ffe3ee'},
+  {key:'reading', emoji:'📚', title:'Reading & phonics', desc:'Stories, letter sounds, blending and sight words', color:'#ffe3ee'},
   {key:'math', emoji:'🧮', title:'Math', desc:'Counting, adding and taking away', color:'#dcf6e5'},
   {key:'english', emoji:'✏️', title:'English & writing', desc:'Sentences, opposites and spelling', color:'#fff0cf'},
   {key:'science', emoji:'🔬', title:'Science', desc:'Planets, animals and plants', color:'#dcf0ff'},
@@ -567,7 +560,7 @@ function startPlay(k){ if (!nav(k, 'play')) renderPlay(k); }
 function openStory(i){ if (!nav('reading', 'story', {index:i})) renderStory(i); }
 function resumeNow(){
   const r = saved.resume;
-  if (!r || !r.subject) return showDailyPath();
+  if (!r || !r.subject) return openRoutine();
   if (r.page === 'story') return openStory(r.index || 0);
   if (r.page === 'lesson') return startLearn(r.subject);
   if (r.page === 'quiz') return startQuiz(r.subject);
@@ -592,8 +585,8 @@ function dailyCards(){
 }
 function renderHome(){
   stopSpeaking();
-  const done = saved.dailyDone[todayKey()] || {}, doneCount = DAILY.filter(d => done[d.key]).length;
-  const toNext = 10 - ((saved.stars || 0) % 10);
+  const R = routineState(), plan = routinePlan(), rDone = R.done;
+  const book = saved.stickerBook || [];
   const cards = subjects.map(s => {
     const st = statFor(s.key), pct = pctFor(s.key);
     return `<button class="subject-card" style="background:${s.color}" onclick="openSubject('${s.key}')">
@@ -606,15 +599,16 @@ function renderHome(){
       <h1>${greeting()}, Ruhaimah!</h1>
       <p>What would you like to learn today? Pick a subject, read a story, or play a game.</p>
       <div class="hero-buttons">
-        <button class="btn primary big" onclick="resumeNow()">▶️ ${esc(resumeLabel())}</button>
+        <button class="btn primary big" onclick="openRoutine()">${rDone ? '✅ Routine done! See my sticker' : R.scores.length ? `🌞 Continue routine (${R.scores.length}/${plan.length})` : '🌞 Start today’s routine'}</button>
         <button class="btn secondary" onclick="openSubject('games')">🎲 Play Tic-Tac-Toe</button>
         <button class="btn gold" onclick="${sayAttr(greeting() + ', Ruhaimah! What would you like to learn today?')}">🔊 Say hello</button>
       </div>
-      <div class="next-sticker"><span class="tiny"><b>${toNext}</b> more ⭐ to your next sticker</span><div class="progress"><i style="width:${(10 - toNext) * 10}%"></i></div></div>
     </section>
     <section class="panel">
-      <div class="section-title"><h2>🗓️ Today’s learning path</h2><span class="pill ${doneCount === DAILY.length ? 'mint' : ''}">${doneCount} / ${DAILY.length} done · 🔥 ${streak()} day streak</span></div>
-      <div class="path">${dailyCards()}</div>
+      <div class="section-title"><h2>🌞 Today’s routine</h2><span class="pill ${rDone ? 'mint' : ''}">${R.scores.length} / ${plan.length} checks · 🔥 ${streak()} day streak</span></div>
+      <div class="path">${plan.map((p, i) => `<div class="path-step ${R.scores[i] ? 'done' : ''}"><span class="num">${R.scores[i] ? '✓' : i + 1}</span><strong>${p.icon} ${esc(p.title)}</strong></div>`).join('')}
+        <div class="path-step gift-step ${rDone ? 'done' : ''}"><span class="num">🎁</span><strong>${rDone ? R.sticker.e + ' ' + esc(R.sticker.name) : 'Surprise sticker'}</strong></div></div>
+      <div class="row-buttons"><button class="btn primary" onclick="openRoutine()">${rDone ? 'See today’s routine' : R.scores.length ? 'Continue →' : 'Start the routine →'}</button><button class="btn gold" onclick="renderStickerBook()">📒 My sticker book (${new Set(book.map(s => s.e)).size})</button>${saved.resume && saved.resume.subject ? `<button class="btn" onclick="resumeNow()">▶️ ${esc(resumeLabel())}</button>` : ''}</div>
     </section>
     <section class="panel">
       <div class="section-title"><h2>📚 Choose a subject</h2><span class="muted">Every subject has Learn, Quiz and Play.</span></div>
@@ -625,7 +619,7 @@ function renderHome(){
       <p class="muted">Progress is saved in this browser. Use the dashboard to export it or move it to another device.</p>
     </section>`);
 }
-function showDailyPath(){ renderHome(); setTimeout(() => { const p = document.querySelector('.path'); p && p.scrollIntoView({behavior:'smooth', block:'center'}); }, 50); }
+function showDailyPath(){ openRoutine(); }
 
 /* ---------- subject page ---------- */
 const playNames = {math:'Count the stars',english:'Build a sentence',logic:'Finish the pattern',school:'Follow directions',general:'Calendar game',chess:'Knight jump',reading:'Word builder',science:'Planet challenge',body:'Body detective',rhymes:'Rhyme time',art:'Color detective',geo:'Capital explorer'};
@@ -684,10 +678,7 @@ function makeQuiz(key){
   if (key === 'math') return Array.from({length:5}, mathItem);
   if (key === 'reading'){
     const stories = shuffle(illustratedStories).slice(0, 3).map(x => ({q:x.q, choices:x.choices, a:x.a, explain:x.lines.join(' '), passage:x.lines.join(' '), scene:x.scene}));
-    const letters = shuffle(ALPHABET).slice(0, 2).map(([L, em, w]) => {
-      const others = shuffle(ALPHABET.filter(x => x[0] !== L)).slice(0, 2);
-      return {q:`Which word starts with ${L}?`, choices:shuffle([[em, w], ...others.map(o => [o[1], o[2]])]).map(([e, ww]) => `${e} ${ww}`), a:`${em} ${w}`, explain:`${w} starts with the letter ${L}.`};
-    });
+    const letters = [blendItem(), phonicsItem()];
     return shuffle([...stories, ...letters]);
   }
   if (key === 'body'){
@@ -711,16 +702,16 @@ function renderQuizCard(){
   const s = subj(Q.subject);
   const dots = Q.items.map((_, i) => `<span class="${i < Q.index ? (Q.results[i] ? 'right' : 'wrong') : i === Q.index ? 'now' : ''}"></span>`).join('');
   const sayQ = q.say || q.q;
-  show(`${crumbs(s.title, `openSubject('${Q.subject}')`)}
+  show(`${Q.back ? crumbs(Q.back[0], Q.back[1]) : crumbs(s.title, `openSubject('${Q.subject}')`)}
   <section class="panel">
-    <div class="section-title"><h1>📝 ${esc(s.title)} quiz</h1><span class="pill">Question ${Q.index + 1} of ${Q.items.length}</span></div>
+    <div class="section-title"><h1>${Q.title ? esc(Q.title) : `📝 ${esc(s.title)} quiz`}</h1><span class="pill">${Q.tag ? esc(Q.tag) + ' · ' : ''}Question ${Q.index + 1} of ${Q.items.length}</span></div>
     <div class="quiz-dots" aria-hidden="true">${dots}</div>
     ${q.passage ? `<div class="story-layout">${q.scene ? storyPicture(q.scene) : ''}<div class="story-box">${esc(q.passage)}<div class="row-buttons">${speakBtn(q.passage, 'Read the story')}</div></div></div>` : ''}
     <div class="question">${speakBtn(sayQ)}<h2>${esc(q.q)}</h2></div>
     ${q.visual ? `<div class="q-visual" aria-hidden="true">${esc(q.visual)}</div>` : ''}${q.html || ''}
     <div class="choice-grid">${q.choices.map((c, i) => `<button class="choice" data-i="${i}" onclick="answerQuiz(${i}, this)">${esc(c)}</button>`).join('')}</div>
     <div class="feedback" id="feedback" aria-live="polite"></div>
-    <button id="nextQuestion" class="btn primary big" hidden onclick="nextQuestion()">${Q.index + 1 < Q.items.length ? 'Next question →' : 'See my stars 🌟'}</button>
+    <button id="nextQuestion" class="btn primary big" hidden onclick="nextQuestion()">${Q.index + 1 < Q.items.length ? 'Next question →' : Q.onDone ? 'Finish this check ✓' : 'See my stars 🌟'}</button>
   </section>`);
   if (voicePrefs.autoRead) speak(q.passage ? [q.passage, sayQ] : sayQ, {quiet:true});
 }
@@ -740,6 +731,7 @@ function answerQuiz(i, el){
   const nb = document.getElementById('nextQuestion'); nb.hidden = false; nb.focus({preventScroll:true});
 }
 function quizDone(){
+  if (currentQuiz.onDone) return currentQuiz.onDone(currentQuiz);
   const Q = currentQuiz, s = subj(Q.subject), n = Q.items.length, r = Q.right;
   const msg = r === n ? 'Perfect score!' : r >= n - 2 ? 'Great work!' : 'Good practice! Let’s try again.';
   const big = r === n ? '🏆' : r >= n - 2 ? '🌟' : '💪';
@@ -757,8 +749,9 @@ function quizDone(){
 function openDashboard(){
   stopSpeaking();
   const rows = subjects.map(s => { const st = statFor(s.key), pct = pctFor(s.key); return `<tr><td>${s.emoji} ${esc(s.title)}</td><td>${st.right || 0} / ${st.total || 0}</td><td style="min-width:120px"><div class="progress" style="margin:0"><i style="width:${pct}%"></i></div></td><td>${st.total ? pct + '%' : '—'}</td></tr>`; }).join('');
-  const got = Math.floor((saved.stars || 0) / 10);
-  const shelf = STICKERS.map((s, i) => `<span class="${i < got ? '' : 'locked'}" title="${i < got ? 'Unlocked' : 'Locked'}">${s}</span>`).join('');
+  const book = saved.stickerBook || [];
+  const shelf = book.length ? book.slice(-30).map(s => `<span title="${esc(s.name)} · ${s.date} · ${s.right}/${s.total}">${s.e}</span>`).join('') : '<span class="tiny">No stickers yet. Finish a daily routine to earn one.</span>';
+  const routineDays = book.length, avg = book.length ? Math.round(book.reduce((a, s) => a + s.right / s.total, 0) / book.length * 100) : 0;
   const t = saved.ttt || {win:0, lose:0, tie:0};
   const last7 = Array.from({length:7}, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); const k = dateKey(d); return {label:d.toLocaleDateString('en-US', {weekday:'short'}), n:saved.days[k] || 0}; });
   const maxN = Math.max(1, ...last7.map(x => x.n));
@@ -767,7 +760,7 @@ function openDashboard(){
     <div class="grid stat-grid"><div class="stat"><b>${saved.stars || 0}</b>Total stars</div><div class="stat"><b>${accuracy()}%</b>Accuracy</div><div class="stat"><b>${streak()}</b>Day streak</div><div class="stat"><b>${Object.keys(saved.days).length}</b>Active days</div><div class="stat"><b>${Object.keys(saved.storiesRead || {}).length}/${illustratedStories.length}</b>Stories read</div></div>
     <h2 style="margin-top:20px">This week</h2>
     <div style="display:flex;gap:10px;align-items:flex-end;height:120px">${last7.map(x => `<div style="flex:1;text-align:center"><div title="${x.n} activities" style="height:${Math.round(x.n / maxN * 90) + 4}px;background:${x.n ? 'linear-gradient(#8f6cf0,#6b46d6)' : '#ece4fb'};border-radius:10px 10px 4px 4px"></div><span class="tiny">${x.label}</span></div>`).join('')}</div>
-    <h2 style="margin-top:20px">Stickers</h2><div class="sticker-shelf">${shelf}</div><p class="tiny">A new sticker every 10 stars.</p>
+    <h2 style="margin-top:20px">🌞 Daily routines</h2><p><b>${routineDays}</b> routine${routineDays === 1 ? '' : 's'} finished · average score <b>${avg}%</b></p><div class="sticker-shelf">${shelf}</div><p class="tiny">One sticker per finished routine. 9–10 right = golden, 7–8 = silver, 5–6 = bronze, otherwise a sprout sticker. <a href="#" onclick="renderStickerBook();return false">Open sticker book</a></p>
     <h2 style="margin-top:20px">By subject</h2>
     <div style="overflow:auto"><table class="dash"><thead><tr><th>Subject</th><th>Right / tried</th><th>Progress</th><th>Accuracy</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p><b>Tic-tac-toe vs Unicorn Bot:</b> ${t.win} wins · ${t.tie} ties · ${t.lose} losses</p>
@@ -790,6 +783,8 @@ function renderSettings(){
         <label class="switch"><input type="checkbox" id="audioOn" ${voicePrefs.audio ? 'checked' : ''} onchange="saveSettings()"> Voice reads aloud</label>
         <label class="switch"><input type="checkbox" id="autoRead" ${voicePrefs.autoRead ? 'checked' : ''} onchange="saveSettings()"> Read quiz questions automatically</label>
         <label class="switch"><input type="checkbox" id="sfxOn" ${voicePrefs.sfx ? 'checked' : ''} onchange="saveSettings()"> Happy sound effects</label>
+        <label class="switch"><input type="checkbox" id="micOn" ${voicePrefs.mic !== false ? 'checked' : ''} ${SR ? '' : 'disabled'} onchange="saveSettings()"> 🎤 Listen when she reads aloud</label>
+        <p class="tiny">${SR ? 'The microphone is only used when she taps 🎤. In Chrome and Edge, speech is sent to Google or Microsoft to be recognized; in Safari it’s handled by Apple. This site saves no recordings.' : 'This browser can’t listen to reading (try Chrome, Edge or Safari). A grown-up check is used instead.'}</p>
       </div>
       <div class="lesson-card"><h3>🐢 Speed <span class="tiny" id="speedLbl"></span></h3>
         <input type="range" id="speed" min="0.6" max="1.15" step="0.05" value="${voicePrefs.speed}" oninput="saveSettings(true)" onchange="saveSettings()">
@@ -828,7 +823,7 @@ function resetVoice(){ voicePrefs = {...defaultVoice}; saveAll(); renderSettings
 function saveSettings(quiet, labelsOnly){
   const g = id => document.getElementById(id);
   if (!labelsOnly){
-    voicePrefs.audio = g('audioOn').checked; voicePrefs.autoRead = g('autoRead').checked; voicePrefs.sfx = g('sfxOn').checked;
+    voicePrefs.audio = g('audioOn').checked; voicePrefs.autoRead = g('autoRead').checked; voicePrefs.sfx = g('sfxOn').checked; if (g('micOn') && SR) voicePrefs.mic = g('micOn').checked;
     voicePrefs.speed = Number(g('speed').value); voicePrefs.pitch = Number(g('pitch').value);
     saveAll(); if (!quiet) toast('Saved ✓');
   }
@@ -838,28 +833,16 @@ function saveSettings(quiet, labelsOnly){
 }
 
 /* ---------- reading ---------- */
-function readingLibrary(){
-  setResume({page:'lesson', subject:'reading'});
-  const read = saved.storiesRead || {};
-  show(`${crumbs('Reading', "openSubject('reading')")}
-  <section class="panel"><div class="section-title"><h1>📚 Story library</h1><span class="pill">${Object.keys(read).length} / ${illustratedStories.length} read</span></div>
-    <p>Choose a picture story. Read it yourself, or tap 🔊 and follow the yellow line.</p>
-    <div class="grid story-grid">${illustratedStories.map((x, i) => `<button class="story-tile" onclick="openStory(${i})">${storyPicture(x.scene)}<strong>${read[i] ? '<span class="done-mark">✅</span>' : ''}${esc(x.title)}</strong><small>4 short sentences</small></button>`).join('')}</div>
-  </section>
-  <section class="panel"><div class="section-title"><h2>🔤 ABC sounds</h2>${speakBtn('Tap a letter to hear it.')}</div>
-    <div class="alphabet-grid">${ALPHABET.map(([L, em, w]) => `<button class="alpha" onclick="${sayAttr(L === 'X' ? `X. X is in fox.` : `${L}. ${L} is for ${w}.`)}"><b>${L}${L.toLowerCase()}</b><span>${em}</span><small>${w}</small></button>`).join('')}</div>
-  </section>
-  <section class="panel"><h2>🧩 Phonics & sight words</h2>${lessonCards(lessons.reading)}</section>`);
-}
 function renderStory(i){
   i = Math.max(0, Math.min(illustratedStories.length - 1, i));
   setResume({page:'story', subject:'reading', index:i});
   const x = illustratedStories[i];
-  show(`${crumbs('Story library', "startLearn('reading')")}
+  show(`${crumbs('Story library', "readingLibrary.tab='stories';startLearn('reading')")}
   <section class="panel"><div class="section-title"><h1>${x.emoji} ${esc(x.title)}</h1><span class="pill">${i + 1} / ${illustratedStories.length}</span></div>
     <div class="story-layout">${storyPicture(x.scene)}<div>
-      <div class="story-box">${x.lines.map((l, j) => `<button class="story-line" onclick="readStoryLine(${i},${j})">${esc(l)} <span aria-hidden="true">🔊</span></button>`).join('')}</div>
-      <div class="row-buttons"><button class="btn primary" onclick="readWholeStory(${i})">🔊 Read to me</button><button class="btn gold" onclick="storyQuiz(${i})">📝 Story question</button></div>
+      <div class="story-box">${x.lines.map((l, j) => `<button class="story-line" onclick="readStoryLine(${i},${j})">${l.split(' ').map(w => `<span class="w" data-say="${esc(w.replace(/[^\w']/g, ''))}">${esc(w)}</span>`).join(' ')} <span aria-hidden="true">🔊</span></button>`).join('')}</div>
+      <div class="row-buttons"><button class="btn primary" onclick="readWholeStory(${i})">🔊 Read to me</button>${Listen.available() ? `<button class="btn secondary" onclick="storyReadMine(${i})"><span class="mic-mini">🎤</span> I’ll read it!</button>` : ''}<button class="btn gold" onclick="storyQuiz(${i})">📝 Story question</button></div>
+      <p id="storyFb" class="feedback" aria-live="polite"></p>
     </div></div>
     <div class="row-buttons"><button class="btn" ${i === 0 ? 'disabled' : ''} onclick="renderStory(${i - 1})">← Previous</button><button class="btn" ${i === illustratedStories.length - 1 ? 'disabled' : ''} onclick="renderStory(${i + 1})">Next story →</button></div>
   </section>`);
@@ -1444,12 +1427,443 @@ function memFlip(i, el){
   }
 }
 
+
+/* ---------- Daily routine: 5 checks → a surprise sticker based on her score ---------- */
+const STICKER_TIERS = [
+  {key:'gold', min:.9, label:'Superstar', frame:'#ffc23d', bonus:3, msg:'Superstar! You got so many right! You earned a super rare golden sticker!',
+   stickers:[['🦄','Golden Unicorn'],['👑','Royal Crown'],['🐉','Friendly Dragon'],['🧚','Sparkle Fairy'],['🏆','Champion Trophy'],['💎','Magic Gem'],['🦚','Proud Peacock'],['🌟','Shining Star'],['🪄','Magic Wand'],['🏰','Castle']]},
+  {key:'silver', min:.7, label:'Great job', frame:'#9fb4ff', bonus:2, msg:'Great job! You earned a shiny silver sticker!',
+   stickers:[['🌈','Rainbow'],['🦋','Butterfly'],['🐬','Dolphin'],['🚀','Rocket'],['🎠','Carousel'],['🦜','Parrot'],['🎨','Paint Palette'],['🐼','Panda'],['🦊','Fox'],['🪐','Ringed Planet']]},
+  {key:'bronze', min:.5, label:'Good work', frame:'#f0a875', bonus:1, msg:'Good work! You earned a sweet sticker!',
+   stickers:[['🌸','Flower'],['🐢','Turtle'],['🍓','Strawberry'],['🐣','Chick'],['🧁','Cupcake'],['🐞','Ladybug'],['🎈','Balloon'],['🍪','Cookie'],['🐠','Fish'],['🍉','Watermelon']]},
+  {key:'sprout', min:0, label:'Keep growing', frame:'#8fd6a8', bonus:1, msg:'You finished every check! Every day you grow a little more. Here is a sprout sticker!',
+   stickers:[['🌱','Little Sprout'],['🐛','Caterpillar'],['🍀','Lucky Clover'],['🐌','Snail'],['🐥','Baby Chick'],['🌼','Daisy']]}
+];
+const tierFor = pct => STICKER_TIERS.find(t => pct >= t.min);
+const DISCOVER = [['science','🔬 Science'],['body','🧍 Human body'],['general','💡 World facts']];
+const THINK = [['logic','🧩 Logic'],['english','✏️ English'],['school','🎯 School skills']];
+
+function dayNumber(){ const d = new Date(); return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 864e5); }
+function routinePlan(){
+  const n = dayNumber(), [dk, dl] = DISCOVER[n % 3], [tk, tl] = THINK[(n + 1) % 3];
+  return [
+    {key:'story', icon:'📖', title:'Story time', subject:'reading', desc:'Read a picture story and answer a question.', story:n % illustratedStories.length},
+    {key:'phonics', icon:'🔤', title:'Letters & sounds', subject:'reading', desc:'2 questions about letters and rhymes.'},
+    {key:'math', icon:'🧮', title:'Math', subject:'math', desc:'3 math questions.'},
+    {key:'discover', icon:'🔭', title:'Discover: ' + dl.replace(/^\S+ /, ''), subject:dk, desc:`2 ${dl.replace(/^\S+ /, '').toLowerCase()} questions.`},
+    {key:'think', icon:'🧠', title:'Think: ' + tl.replace(/^\S+ /, ''), subject:tk, desc:`2 ${tl.replace(/^\S+ /, '').toLowerCase()} questions.`}
+  ];
+}
+function routineState(){
+  if (!saved.routine || saved.routine.date !== todayKey()) saved.routine = {date:todayKey(), step:0, scores:[], done:false, sticker:null, opened:false};
+  return saved.routine;
+}
+function phonicsItem(){
+  const r = Math.random();
+  if (r < .34) return blendItem();
+  if (r < .67){
+    const [L, em, w] = pick(ALPHABET), others = shuffle(ALPHABET.filter(x => x[0] !== L)).slice(0, 2);
+    return {q:`Which word starts with ${L}?`, choices:shuffle([`${em} ${w}`, ...others.map(o => `${o[1]} ${o[2]}`)]), a:`${em} ${w}`, explain:`${w} starts with the letter ${L}.`};
+  }
+  const x = pick([['cat','hat','dog','sun'],['star','car','fish','book'],['cake','lake','tree','ball'],['hill','Jill','cup','pen'],['bee','tree','pig','box'],['boat','coat','ring','map'],['fun','sun','bed','cup']]);
+  return {q:`Which word rhymes with “${x[0]}”?`, choices:shuffle(x.slice(1)), a:x[1], explain:`${x[0]} and ${x[1]} rhyme.`};
+}
+function routineItems(step){
+  if (step.key === 'story'){ const x = illustratedStories[step.story]; return [{q:x.q, choices:shuffle(x.choices), a:x.a, explain:x.lines.join(' '), passage:x.lines.join(' '), scene:x.scene}]; }
+  if (step.key === 'phonics'){ const a = phonicsItem(); let b = phonicsItem(); while (b.q === a.q) b = phonicsItem(); return [a, b]; }
+  if (step.key === 'math') return Array.from({length:3}, mathItem);
+  return makeQuiz(step.subject).slice(0, 2);
+}
+function openRoutine(){ if (!nav('', 'routine')) renderRoutine(); }
+function routineTotals(){ const r = routineState(); const right = r.scores.reduce((s, x) => s + x.right, 0), total = r.scores.reduce((s, x) => s + x.total, 0); return {right, total, pct: total ? right / total : 0}; }
+
+function renderRoutine(justDone){
+  stopSpeaking();
+  const r = routineState(), plan = routinePlan();
+  if (r.done && !r.opened) return renderStickerReveal();
+  const t = routineTotals();
+  const list = plan.map((s, i) => {
+    const sc = r.scores[i], cur = i === r.step && !r.done;
+    return `<div class="routine-step ${sc ? 'done' : ''} ${cur ? 'current' : ''} ${justDone === i ? 'just' : ''}">
+      <span class="check">${sc ? '✓' : i + 1}</span>
+      <span class="r-icon">${s.icon}</span>
+      <span class="r-text"><b>${esc(s.title)}</b><small>${sc ? `${'⭐'.repeat(sc.right)}${'<span style="opacity:.25">⭐</span>'.repeat(sc.total - sc.right)}` : esc(s.desc)}</small></span>
+      ${cur ? `<button class="btn primary" onclick="startRoutineStep()">${i === 0 && !r.scores.length ? 'Start' : 'Go'} →</button>` : ''}</div>`;
+  }).join('');
+  const next = plan[r.step];
+  show(`${crumbs('Home', 'goHome()')}
+  <section class="panel routine-panel">
+    <div class="section-title"><h1>🌞 Today’s routine</h1><span class="pill">${r.scores.length} / ${plan.length} checks done</span></div>
+    <p class="muted">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'})} · Finish all ${plan.length} checks to open today’s surprise sticker! 🎁</p>
+    <div class="progress" style="height:18px"><i style="width:${r.scores.length / plan.length * 100}%"></i></div>
+    <div class="routine-list">${list}</div>
+    ${r.done ? `<div class="fact" style="text-align:center"><h2>✅ All done for today!</h2>${stickerCard(r.sticker, true)}<p>You got <b>${t.right}</b> of <b>${t.total}</b> right. Come back tomorrow for a new sticker!</p><div class="row-buttons" style="justify-content:center"><button class="btn primary" onclick="renderStickerBook()">📒 My sticker book</button><button class="btn" onclick="openSubject('games')">🎲 Play a game</button></div></div>`
+      : `<div class="mystery"><div class="gift">🎁</div><div><b>Today’s surprise sticker</b><br><span class="tiny">The more you get right, the rarer the sticker: 🌱 → 🥉 → 🥈 → 🏆 golden!</span></div></div>`}
+  </section>`);
+  if (justDone !== undefined && !r.done) speak(`Check ${justDone + 1} done! Next: ${next.title}.`, {quiet:true});
+  else if (justDone === undefined && !r.done) speak(r.scores.length ? `Welcome back! Next is ${next.title}.` : `Good ${greeting().split(' ')[1]}, Ruhaimah! Let’s do today’s routine. Finish all five checks to get a surprise sticker!`, {quiet:true});
+}
+function startRoutineStep(){
+  const r = routineState(), plan = routinePlan(), step = plan[r.step]; if (!step) return renderRoutine();
+  currentQuiz = {subject:step.subject, index:0, right:0, results:[], items:routineItems(step),
+    title:`${step.icon} ${step.title}`, tag:`Check ${r.step + 1} of ${plan.length}`, back:['Today’s routine', 'renderRoutine()'],
+    onDone: Q => finishRoutineStep(Q)};
+  renderQuizCard();
+}
+function finishRoutineStep(Q){
+  const r = routineState(), plan = routinePlan(), i = r.step;
+  r.scores[i] = {right:Q.right, total:Q.items.length};
+  r.step = i + 1; Sfx.good();
+  if (r.step >= plan.length){
+    r.done = true;
+    const t = routineTotals(), tier = tierFor(t.pct);
+    const have = new Set((saved.stickerBook || []).map(s => s.e));
+    const pool = tier.stickers.filter(s => !have.has(s[0]));
+    const [e, name] = pick(pool.length ? pool : tier.stickers);
+    r.sticker = {e, name, tier:tier.key, right:t.right, total:t.total, date:todayKey()};
+    saved.stickerBook = (saved.stickerBook || []).concat([r.sticker]);
+    addStars(tier.bonus); trackDay(); saveAll();
+    return renderStickerReveal();
+  }
+  saveAll(); renderRoutine(i);
+}
+function stickerCard(s, small){
+  if (!s) return '';
+  const t = STICKER_TIERS.find(x => x.key === s.tier) || STICKER_TIERS[3];
+  return `<div class="sticker-card tier-${t.key} ${small ? 'small' : ''}" style="--frame:${t.frame}"><span class="s-emoji">${s.e}</span><b>${esc(s.name)}</b><small>${t.label}</small></div>`;
+}
+function renderStickerReveal(){
+  const r = routineState(), s = r.sticker, t = STICKER_TIERS.find(x => x.key === s.tier);
+  show(`<section class="panel celebrate">
+    <h1>🎉 You finished today’s routine!</h1>
+    <p style="font-size:22px">You got <b>${s.right}</b> out of <b>${s.total}</b> right.</p>
+    <div id="revealZone"><button class="gift-btn" onclick="openGift()" aria-label="Open your surprise sticker">🎁<span>Tap to open!</span></button></div>
+    <div id="revealAfter" hidden>
+      <p style="font-size:22px;font-weight:800" id="revealMsg">${esc(t.msg)}</p>
+      <div class="row-buttons" style="justify-content:center"><button class="btn primary big" onclick="renderStickerBook()">📒 Put it in my sticker book</button><button class="btn" onclick="goHome()">🏠 Home</button></div>
+    </div>
+  </section>`);
+  speak('You finished today’s routine! Tap the present to open your surprise sticker!', {quiet:true});
+}
+function openGift(){
+  const r = routineState(), s = r.sticker, t = STICKER_TIERS.find(x => x.key === s.tier);
+  r.opened = true; saveAll();
+  document.getElementById('revealZone').innerHTML = `<div class="reveal-pop">${stickerCard(s)}</div>`;
+  document.getElementById('revealAfter').hidden = false;
+  Sfx.win(); confetti(s.tier === 'gold' ? 60 : 34);
+  speak(`${t.msg} It’s the ${s.name}!`, {quiet:true});
+}
+function renderStickerBook(){
+  stopSpeaking();
+  const book = saved.stickerBook || [], have = new Set(book.map(s => s.e));
+  const tiers = STICKER_TIERS.map(t => `<h3 style="margin-top:16px">${t.key === 'gold' ? '🏆' : t.key === 'silver' ? '🥈' : t.key === 'bronze' ? '🥉' : '🌱'} ${t.label} stickers <span class="tiny">${t.key === 'gold' ? '(9–10 right)' : t.key === 'silver' ? '(7–8 right)' : t.key === 'bronze' ? '(5–6 right)' : '(finish the routine)'}</span></h3>
+    <div class="book-row">${t.stickers.map(([e, n]) => have.has(e) ? `<div class="book-slot got" style="--frame:${t.frame}" title="${esc(n)}"><span>${e}</span><small>${esc(n)}</small></div>` : `<div class="book-slot" title="Not found yet"><span>❔</span><small>???</small></div>`).join('')}</div>`).join('');
+  const recent = book.slice(-14).reverse().map(s => `<div class="check"><span style="font-size:30px">${s.e}</span><span style="flex:1"><b>${esc(s.name)}</b><br><span class="tiny">${new Date(s.date + 'T12:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'})}</span></span><span class="pill">${s.right}/${s.total}</span></div>`).join('');
+  show(`${crumbs('Home', 'goHome()')}
+  <section class="panel"><div class="section-title"><h1>📒 My sticker book</h1><span class="pill">${have.size} / ${STICKER_TIERS.reduce((n, t) => n + t.stickers.length, 0)} collected</span></div>
+    <p class="muted">Finish the daily routine to get a new sticker each day. Get more answers right for rarer stickers!</p>
+    ${tiers}
+    ${recent ? `<h2 style="margin-top:22px">🗓️ My sticker days</h2><div class="checklist">${recent}</div>` : ''}
+    <div class="row-buttons"><button class="btn primary" onclick="openRoutine()">🌞 Today’s routine</button></div>
+  </section>`);
+}
+
+/* ---------- Listening: she reads aloud, the app checks the words ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function setListening(on){ document.querySelectorAll('.mic-btn').forEach(b => b.classList.toggle('listening', !!on)); }
+const Listen = {
+  rec:null, err:null,
+  available(){ return !!SR && voicePrefs.mic !== false && (location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)); },
+  start(opts = {}){
+    this.stop(); stopSpeaking();
+    return new Promise(resolve => {
+      let r; try{ r = new SR(); }catch(e){ return resolve({alts:[], text:'', error:'unsupported'}); }
+      this.rec = r; this.err = null;
+      r.lang = 'en-US'; r.interimResults = !!opts.onInterim; r.maxAlternatives = 5; r.continuous = !!opts.continuous;
+      const alts = []; let finalText = '';
+      r.onresult = e => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++){
+          const res = e.results[i];
+          if (res.isFinal){ for (let j = 0; j < res.length; j++) alts.push(res[j].transcript); finalText += ' ' + res[0].transcript; }
+          else interim += ' ' + res[0].transcript;
+        }
+        if (opts.onInterim && opts.onInterim((finalText + ' ' + interim).trim()) === true){ try{ r.stop(); }catch(err){} }
+      };
+      r.onerror = e => { this.err = e.error; };
+      r.onend = () => { if (this.rec === r) this.rec = null; clearTimeout(timer); setListening(false); resolve({alts, text:finalText.trim(), error:this.err}); };
+      const timer = setTimeout(() => { try{ r.stop(); }catch(e){} }, opts.maxMs || 6000);
+      try{ r.start(); setListening(true); Sfx.tone(880, .08, 'sine', 0, .05); }catch(e){ clearTimeout(timer); resolve({alts:[], text:'', error:'start'}); }
+    });
+  },
+  stop(){ if (this.rec){ try{ this.rec.abort(); }catch(e){} this.rec = null; } setListening(false); }
+};
+const NUM_WORDS = {0:'zero',1:'one',2:'two',3:'three',4:'four',5:'five',6:'six',7:'seven',8:'eight',9:'nine',10:'ten'};
+const HOMOPHONES = {sun:['son'],be:['bee'],bee:['be'],see:['sea'],sea:['see'],to:['two','too'],two:['to','too'],too:['to','two'],for:['four'],four:['for'],no:['know'],red:['read'],eight:['ate'],ate:['eight'],one:['won'],hi:['high'],blue:['blew'],new:['knew'],by:['buy','bye'],there:['their'],right:['write'],would:['wood'],our:['hour'],rap:['wrap'],hen:['hands'],cat:['kat','cats'],dog:['dogs'],pen:['pin'],pin:['pen'],ten:['tin'],bug:['bugs'],ship:['chip'],chip:['ship']};
+function normWords(t){ return String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').split(/\s+/).filter(Boolean).map(w => NUM_WORDS[w] || w.replace(/'/g, '')); }
+function lev(a, b){ const m = Array.from({length:a.length + 1}, (_, i) => [i]); for (let j = 1; j <= b.length; j++) m[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return m[a.length][b.length]; }
+function wordMatches(heard, target){ target = target.toLowerCase(); return heard === target || (HOMOPHONES[target] || []).includes(heard) || (target.length >= 5 && lev(heard, target) <= 1); }
+function judgeWord(target, alts){
+  let close = null;
+  for (const a of alts){ const ws = normWords(a); if (ws.some(w => wordMatches(w, target))) return {ok:true}; ws.forEach(w => { if (!close && lev(w, target.toLowerCase()) <= 1) close = w; }); }
+  return {ok:false, close, heard:alts[0] || ''};
+}
+/* mic + grown-up check widget used by blending and sight words */
+function micBlock(id){ return `<div class="mic-zone" id="${id}">${Listen.available() ? `<button class="mic-btn" onclick="${id}Go()" aria-label="Tap and say it">🎤</button><div class="mic-help"><b>Tap the microphone</b>, then say the word.<div id="${id}Heard" class="tiny"></div></div>` : ''}</div>`; }
+function grownUpCheck(el, yes, retry, reason){
+  el.innerHTML = `<div class="grownup"><span class="tiny">${esc(reason || 'Grown-up check')}</span><b>Did she say it right?</b><div class="row-buttons" style="margin-top:6px"><button class="btn secondary">✅ Yes!</button><button class="btn">🔁 Try again</button></div></div>`;
+  const [y, n] = el.querySelectorAll('button'); y.onclick = yes; n.onclick = retry;
+}
+function micError(err){
+  if (err === 'not-allowed' || err === 'service-not-allowed') return 'The microphone is blocked. Allow it in the browser, or use the grown-up check.';
+  if (err === 'no-speech') return 'I didn’t hear anything. Tap 🎤 and speak a little louder.';
+  if (err === 'network') return 'Listening needs internet. Use the grown-up check.';
+  if (err === 'audio-capture') return 'No microphone found. Use the grown-up check.';
+  return '';
+}
+/* Ask her to say one word; resolves true when she gets it (by mic or grown-up check) */
+function sayWordCheck(id, target, onCorrect){
+  const zone = document.getElementById(id); let tries = 0;
+  const showCheck = reason => grownUpCheck(zone, () => onCorrect('check'), () => { zone.outerHTML = micBlock(id); wire(); }, reason);
+  function wire(){
+    window[id + 'Go'] = async () => {
+      const heardEl = document.getElementById(id + 'Heard'); if (heardEl) heardEl.textContent = 'Listening… 👂';
+      const res = await Listen.start({maxMs:5000});
+      if (res.error === 'aborted' || !document.getElementById(id)) return;
+      const msg = micError(res.error);
+      if (msg && !res.alts.length){ if (heardEl) heardEl.textContent = msg; if (res.error !== 'no-speech') showCheck('Listening isn’t working here'); return; }
+      const j = judgeWord(target, res.alts); tries++;
+      if (j.ok) return onCorrect('mic');
+      Sfx.bad();
+      const said = j.heard ? `I heard “${j.heard.trim()}”.` : '';
+      if (heardEl) heardEl.textContent = `${said} ${j.close ? 'So close!' : 'Let’s try again!'}`;
+      speak(`${j.close ? 'So close!' : 'Good try!'} Listen again and try once more.`, {quiet:true});
+      if (tries >= 2) showCheck('Tricky one! Grown-up check');
+    };
+  }
+  if (!Listen.available()){ showCheck(SR ? 'Listening is turned off in Settings' : 'This browser can’t listen. Grown-up check'); return; }
+  wire();
+}
+
+/* ---------- phonics data ---------- */
+const SOUND = {a:'ah',b:'buh',c:'kuh',d:'duh',e:'eh',f:'fuh',g:'guh',h:'huh',i:'ih',j:'juh',k:'kuh',l:'luh',m:'mmm',n:'nnn',o:'aw',p:'puh',q:'kwuh',r:'ruh',s:'sss',t:'tuh',u:'uh',v:'vuh',w:'wuh',x:'ks',y:'yuh',z:'zzz',sh:'shhh',ch:'chuh',th:'thuh',ck:'kuh',wh:'wuh'};
+const DIGRAPHS = [['sh','🚢','ship','shhh, like when you ask someone to be quiet'],['ch','🍟','chip','chuh, like a train: choo choo'],['th','🛁','bath','thuh, put your tongue between your teeth'],['ck','🦆','duck','kuh, at the end of a word'],['wh','🐳','whale','wuh, like the wind']];
+const BLEND_WORDS = [
+  [['c','a','t'],'🐱'],[['h','a','t'],'🎩'],[['b','a','t'],'🦇'],[['m','a','p'],'🗺️'],[['v','a','n'],'🚐'],[['p','a','n'],'🍳'],[['r','a','t'],'🐀'],[['b','a','g'],'👜'],[['c','a','n'],'🥫'],[['c','a','p'],'🧢'],
+  [['d','o','g'],'🐶'],[['l','o','g'],'🪵'],[['p','o','t'],'🍲'],[['b','o','x'],'📦'],[['f','o','x'],'🦊'],[['m','o','p'],'🧹'],[['h','o','t'],'🔥'],
+  [['p','i','g'],'🐷'],[['p','i','n'],'📌'],[['l','i','p'],'👄'],[['s','i','x'],'6️⃣'],[['k','i','d'],'🧒'],[['f','i','n'],'🦈'],[['w','i','n'],'🏆'],
+  [['s','u','n'],'☀️'],[['b','u','s'],'🚌'],[['b','u','g'],'🐛'],[['c','u','p'],'☕'],[['n','u','t'],'🥜'],[['h','u','g'],'🤗'],[['r','u','n'],'🏃'],
+  [['h','e','n'],'🐔'],[['b','e','d'],'🛏️'],[['n','e','t'],'🥅'],[['p','e','n'],'🖊️'],[['j','e','t'],'✈️'],[['w','e','b'],'🕸️'],[['l','e','g'],'🦵'],[['t','e','n'],'🔟'],[['r','e','d'],'🔴'],
+  [['sh','i','p'],'🚢',2],[['f','i','sh'],'🐟',2],[['ch','i','p'],'🍟',2],[['b','a','th'],'🛁',2],[['d','u','ck'],'🦆',2],[['s','o','ck'],'🧦',2],[['r','o','ck'],'🪨',2],[['sh','o','p'],'🛍️',2],[['ch','i','ck'],'🐤',2],[['m','o','th'],'🦋',2]
+];
+const WORD_EMOJI = Object.fromEntries(BLEND_WORDS.map(([s, e]) => [s.join(''), e]).concat([['man','👨'],['dig','⛏️'],['hop','🐇'],['top','🔝'],['pop','🎈'],['mug','☕'],['jug','🏺'],['vet','🩺'],['wet','💧'],['pet','🐹'],['bin','🗑️'],['tin','🥫'],['dot','⚫'],['cot','🛏️'],['bun','🍔'],['fun','🎉'],['nap','😴'],['tap','🚰'],['big','🐘'],['fig','🫐'],['wig','💇'],['cop','👮'],['tug','🚢'],['set','🧩'],['get','🤲']]));
+const FAMILIES = [
+  ['at','bcfhmprs','zj'],['an','cfmprtv','zl'],['ig','bdfpwj','zh'],['op','chmpt','zn'],['ug','bdhjmrt','zv'],
+  ['et','bgjlmnpsvw','zf'],['in','bfptw','zl'],['ot','cdghlnpr','zf'],['un','bfrs','zm'],['ap','cglmnst','vh']
+];
+const SIGHT_LEVELS = [
+  {name:'🐣 Level 1', words:'a and away big blue can come down find for funny go help here I in is it jump little look make me my not one play red run said see the three to two up we where yellow you'},
+  {name:'🐰 Level 2', words:'all am are at ate be black brown but came did do eat four get good have he into like must new no now on our out please pretty ran ride saw say she so soon that there they this too under want was well went what white who will with yes'},
+  {name:'🦁 Level 3', words:'after again any ask by could every fly from give going had has her him his how just know let live may of old once open over put round some stop take thank them then think walk were when'}
+].map(l => ({...l, words:l.words.split(' ')}));
+const READ_SENTENCES = [
+  ['The cat sat on a mat.','🐱'],['A big pig can dig.','🐷'],['The sun is hot.','☀️'],['I can see a red bug.','🐞'],['Dad has a big map.','🗺️'],['The dog ran to the log.','🐶'],
+  ['Ten hens sit in a pen.','🐔'],['The fox is in the box.','🦊'],['We can hop and jump.','🐸'],['Mom and I go to the shop.','🛍️'],['The duck is in the pond.','🦆'],['I like my blue cup.','☕'],
+  ['A fish can swim.','🐟'],['Look at the big ship!','🚢'],['She has a pink hat.','👒'],['Can you run fast?','🏃'],['The bus is red and big.','🚌'],['I see six fish in the net.','🥅']
+];
+const soundOf = g => SOUND[g] || g;
+const soundSay = g => `${soundOf(g)}.`;
+
+/* ---------- Reading & phonics hub (tabs) ---------- */
+const READ_TABS = [['stories','📚 Stories'],['sounds','🔤 Letter sounds'],['blend','🧩 Blend it'],['families','🏠 Word families'],['sight','👀 Sight words'],['aloud','🎤 Read aloud']];
+function readingLibrary(tab){
+  tab = tab || readingLibrary.tab || 'stories'; readingLibrary.tab = tab;
+  setResume({page:'lesson', subject:'reading'}); Listen.stop();
+  const head = `${crumbs('Reading', "openSubject('reading')")}<section class="panel"><div class="section-title"><h1>📚 Reading & phonics</h1>${Listen.available() ? '<span class="pill mint">🎤 Listening is on</span>' : '<span class="pill">✋ Grown-up check mode</span>'}</div>
+    <div class="tabs">${READ_TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'active' : ''}" onclick="readingLibrary('${k}')">${l}</button>`).join('')}</div><div id="readZone"></div></section>`;
+  show(head);
+  ({stories:tabStories, sounds:tabSounds, blend:tabBlend, families:tabFamilies, sight:tabSight, aloud:tabAloud})[tab]();
+}
+const RZ = html => { document.getElementById('readZone').innerHTML = html; };
+function tabStories(){
+  const read = saved.storiesRead || {};
+  RZ(`<p>Choose a picture story. Tap 🔊 to listen, or 🎤 to read it yourself. <span class="pill">${Object.keys(read).length} / ${illustratedStories.length} read</span></p>
+    <div class="grid story-grid">${illustratedStories.map((x, i) => `<button class="story-tile" onclick="openStory(${i})">${storyPicture(x.scene)}<strong>${read[i] ? '<span class="done-mark">✅</span>' : ''}${esc(x.title)}</strong><small>4 short sentences</small></button>`).join('')}</div>`);
+}
+function tabSounds(){
+  RZ(`<h2>🔤 Letter sounds</h2><p class="muted">Tap a letter to hear its <b>sound</b> and a word that starts with it.</p>
+    <div class="alphabet-grid">${ALPHABET.map(([L, em, w]) => `<button class="alpha" onclick="${sayAttr(L === 'X' ? 'X says ks, like in fox.' : `${soundOf(L.toLowerCase())}. ${soundOf(L.toLowerCase())}. ${w}.`)}"><b>${L}${L.toLowerCase()}</b><span>${em}</span><small>${w}</small></button>`).join('')}</div>
+    <h2 style="margin-top:20px">👯 Two letters, one sound</h2>
+    <div class="grid lesson-grid">${DIGRAPHS.map(([d, em, w, tip]) => `<div class="lesson-card"><span class="big-emoji">${em}</span><h3 style="font-size:34px;margin:0">${d}</h3><p><b>${w}</b>: ${esc(tip)}</p><div class="row-buttons">${speakBtn(`${d.split('').join(' ')} says ${tip}. ${w}.`, 'Listen')}</div></div>`).join('')}</div>
+    <h2 style="margin-top:20px">👂 Sound detective</h2><p class="muted">Listen to the sound. Which picture starts with it?</p><div id="soundGame"></div>`);
+  soundGame();
+}
+function soundGame(){
+  const z = document.getElementById('soundGame'); if (!z) return;
+  const pool = ALPHABET.filter(x => !'QXUIEV'.includes(x[0]));
+  const t = pick(pool), opts = shuffle([t, ...shuffle(pool.filter(x => x[0] !== t[0])).slice(0, 2)]);
+  const s = soundOf(t[0].toLowerCase());
+  z.innerHTML = `<div class="question"><button class="speak-btn" onclick="speak('${s}. ${s}. Which picture starts with ${s}?')">🔊</button><h2>Which picture starts with <span style="color:var(--purple)">/${t[0].toLowerCase()}/</span>?</h2></div>
+    <div class="choice-grid">${opts.map(o => `<button class="choice" style="font-size:54px" aria-label="${o[2]}" data-ok="${o[0] === t[0]}">${o[1]}<br><small style="font-size:18px">${o[2]}</small></button>`).join('')}</div><p id="playFeedback" class="feedback"></p><button class="btn" onclick="soundGame()">Next sound →</button>`;
+  z.querySelectorAll('.choice').forEach(b => b.onclick = () => { if (b.dataset.ok === 'true'){ b.classList.add('good'); recordResult('reading', true, b); speak(`Yes! ${t[2]} starts with ${s}.`, {quiet:true}); setTimeout(soundGame, 1600); } else { b.classList.add('bad'); b.disabled = true; Sfx.bad(); speak(`Listen: ${s}. ${t[2]}.`, {quiet:true}); } });
+  speak(`${s}. ${s}. Which picture starts with ${s}?`, {quiet:true});
+}
+
+/* Blend it: hear each sound, then say the whole word */
+const BL = {level:1, word:null};
+function tabBlend(){
+  const list = BLEND_WORDS.filter(w => (w[2] || 1) === BL.level), item = BL.word && list.includes(BL.word) ? BL.word : pick(list); BL.word = item;
+  const [parts, em] = item, word = parts.join('');
+  const others = shuffle(list.filter(w => w !== item)).slice(0, 2);
+  RZ(`<div class="section-title"><h2>🧩 Blend it!</h2><div class="seg">${[[1,'🐣 Short words'],[2,'🦁 sh · ch · th · ck']].map(([l, n]) => `<button class="${BL.level === l ? 'active' : ''}" onclick="BL.level=${l};BL.word=null;tabBlend()">${n}</button>`).join('')}</div></div>
+    <p class="muted">1. Tap each tile to hear its sound. 2. Tap <b>🐢 Slow blend</b>. 3. Say the whole word!</p>
+    <div class="blend-tiles" id="tiles">${parts.map((p, i) => `<button class="tile" onclick="tileSay(${i})">${p}</button>`).join('')}<span class="blend-eq">=</span><span class="blend-pic" id="blendPic">❓</span></div>
+    <div class="row-buttons"><button class="btn primary" onclick="slowBlend()">🐢 Slow blend</button><button class="btn" onclick="fastBlend()">🐇 Fast blend</button></div>
+    ${micBlock('blendMic')}
+    <details class="tiny" style="margin-top:6px"><summary>Need help? Pick the picture instead</summary><div class="choice-grid">${shuffle([item, ...others]).map(w => `<button class="choice" style="font-size:44px" data-w="${w[0].join('')}">${w[1]}</button>`).join('')}</div></details>
+    <p id="playFeedback" class="feedback" aria-live="polite"></p>
+    <div class="row-buttons"><button class="btn big" id="blendNext" onclick="BL.word=null;tabBlend()">Next word →</button></div>`);
+  document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => b.dataset.w === word ? blendWin('pick', b) : (b.classList.add('bad'), b.disabled = true, Sfx.bad()));
+  sayWordCheck('blendMic', word, how => blendWin(how));
+  speak(['Let’s blend!', ...parts.map(soundSay)], {gap:450, quiet:true, onPart: i => tileGlow(i - 1)});
+}
+function tileGlow(i){ document.querySelectorAll('#tiles .tile').forEach((t, j) => t.classList.toggle('on', j === i)); }
+function tileSay(i){ const p = BL.word[0][i]; tileGlow(i); speak(soundSay(p), {quiet:true, onPart: k => { if (k < 0) tileGlow(-1); }}); }
+function slowBlend(){ const ps = BL.word[0]; speak(ps.map(soundSay), {gap:550, rate:.75, onPart: i => tileGlow(i)}); }
+function fastBlend(){ const ps = BL.word[0]; speak(ps.map(p => soundOf(p)).join(' '), {rate:1.05, onPart: i => document.querySelectorAll('#tiles .tile').forEach(t => t.classList.toggle('on', i === 0))}); }
+function blendWin(how, el){
+  const word = BL.word[0].join(''), fb = document.getElementById('playFeedback');
+  document.getElementById('blendPic').textContent = BL.word[1];
+  document.querySelectorAll('#tiles .tile').forEach(t => t.classList.add('done'));
+  const z = document.getElementById('blendMic'); if (z) z.innerHTML = `<div class="mic-ok">✅ ${how === 'mic' ? 'I heard you say' : 'The word is'} <b>${esc(word)}</b>!</div>`;
+  recordResult('reading', true, el || document.getElementById('tiles'));
+  saved.blendCount = (saved.blendCount || 0) + 1; saveAll();
+  const c = pick(cheers); fb.className = 'feedback good'; fb.textContent = `🌟 ${c} ${BL.word[0].join(' - ')} makes ${word}!`;
+  speak([`${c}`, `${BL.word[0].map(soundOf).join(', ')}.`, `${word}!`], {quiet:true, gap:300});
+  document.getElementById('blendNext').classList.add('primary');
+}
+
+/* Word families: change the first letter to make new words */
+const FAM = {i:0};
+function tabFamilies(){
+  const [rime, real, silly] = FAMILIES[FAM.i], onsets = shuffle((real + silly).split(''));
+  RZ(`<div class="section-title"><h2>🏠 The “-${rime}” family</h2>${speakBtn(`The ${rime} family. Tap a letter to make a new word. Is it a real word or a silly word?`)}</div>
+    <div class="tabs">${FAMILIES.map(([r], i) => `<button class="tab ${i === FAM.i ? 'active' : ''}" onclick="FAM.i=${i};tabFamilies()">-${r}</button>`).join('')}</div>
+    <div class="family-build"><span class="tile onset" id="onset">?</span><span class="tile rime">${rime}</span><span class="blend-eq">=</span><span class="blend-pic" id="famPic">🏠</span></div>
+    <p id="famMsg" class="feedback" style="min-height:34px">Tap a letter to put it in front!</p>
+    <div class="onset-row">${onsets.map(o => `<button class="btn big gold" onclick="famTry('${o}')">${o}</button>`).join('')}</div>
+    <h3 style="margin-top:16px">Real words found: <span id="famFound"></span></h3>`);
+  FAM.found = new Set(); famShow();
+}
+function famShow(){ const el = document.getElementById('famFound'); if (el) el.textContent = [...FAM.found].join(', ') || '—'; }
+function famTry(o){
+  const [rime, real] = FAMILIES[FAM.i], word = o + rime, isReal = real.includes(o);
+  document.getElementById('onset').textContent = o;
+  document.getElementById('famPic').textContent = isReal ? (WORD_EMOJI[word] || '✅') : '🤪';
+  const msg = document.getElementById('famMsg');
+  msg.className = 'feedback ' + (isReal ? 'good' : 'bad');
+  msg.textContent = isReal ? `“${word}” is a real word!` : `“${word}” is a silly word! 😄`;
+  speak([`${soundOf(o)}. ${rime}.`, `${word}!`, isReal ? 'That is a real word!' : 'That is a silly word!'], {quiet:true, gap:250});
+  if (isReal && !FAM.found.has(word)){ FAM.found.add(word); famShow(); if (FAM.found.size === real.length){ recordResult('reading', true, msg); confetti(); setTimeout(() => speak(`You found all the ${rime} words!`, {quiet:true}), 2600); } else Sfx.pop(); }
+}
+
+/* Sight words: flash cards she reads to the app */
+const SW = {level:0, idx:0, order:[]};
+function tabSight(){
+  const L = SIGHT_LEVELS[SW.level]; saved.sightKnown = saved.sightKnown || {};
+  if (!SW.order.length || SW.orderLevel !== SW.level){ SW.order = shuffle(L.words); SW.idx = 0; SW.orderLevel = SW.level; }
+  const w = SW.order[SW.idx % SW.order.length], known = L.words.filter(x => saved.sightKnown[x]).length;
+  const micOK = w.length > 1;
+  RZ(`<div class="section-title"><h2>👀 Sight words</h2><div class="seg">${SIGHT_LEVELS.map((l, i) => `<button class="${i === SW.level ? 'active' : ''}" onclick="SW.level=${i};tabSight()">${l.name}</button>`).join('')}</div></div>
+    <p class="muted">Sight words are words we read by looking. Read the card out loud!</p>
+    <div class="progress"><i style="width:${known / L.words.length * 100}%"></i></div><p class="tiny">${known} of ${L.words.length} words read correctly</p>
+    <div class="flash-card ${saved.sightKnown[w] ? 'known' : ''}" id="flash">${esc(w)}</div>
+    ${micOK ? micBlock('sightMic') : '<div class="mic-zone" id="sightMic"></div>'}
+    <p id="playFeedback" class="feedback" aria-live="polite"></p>
+    <div class="row-buttons"><button class="btn sky" onclick="${sayAttr(w)}">🔊 Hear it</button><button class="btn big" id="sightNext" onclick="SW.idx++;tabSight()">Next card →</button></div>
+    <details style="margin-top:10px"><summary class="tiny">See all ${L.words.length} words</summary><div class="word-cloud">${L.words.map(x => `<span class="${saved.sightKnown[x] ? 'known' : ''}">${esc(x)}</span>`).join('')}</div></details>`);
+  const win = how => {
+    saved.sightKnown[w] = (saved.sightKnown[w] || 0) + 1; recordResult('reading', true, document.getElementById('flash'));
+    document.getElementById('flash').classList.add('known');
+    const z = document.getElementById('sightMic'); if (z) z.innerHTML = `<div class="mic-ok">✅ ${how === 'mic' ? 'I heard' : 'Yes,'} “${esc(w)}”!</div>`;
+    const fb = document.getElementById('playFeedback'); fb.className = 'feedback good'; fb.textContent = '🌟 ' + pick(cheers);
+    speak(pick(cheers), {quiet:true}); document.getElementById('sightNext').classList.add('primary');
+  };
+  if (micOK) sayWordCheck('sightMic', w, win);
+  else grownUpCheck(document.getElementById('sightMic'), () => win('check'), () => speak(w), 'One-letter word. Grown-up check');
+}
+
+/* Read aloud: words light up green as she reads them */
+const RA = {i:0};
+function tabAloud(){
+  const [text, em] = READ_SENTENCES[RA.i % READ_SENTENCES.length];
+  RZ(`<div class="section-title"><h2>🎤 Read it to me</h2><span class="pill">Sentence ${RA.i % READ_SENTENCES.length + 1} of ${READ_SENTENCES.length}</span></div>
+    <p class="muted">${Listen.available() ? 'Tap the microphone and read the sentence. Each word turns green when I hear it!' : 'Read the sentence out loud to a grown-up. Tap a word to hear it.'}</p>
+    <div class="read-card"><span class="read-emoji">${em}</span><div id="readWords" class="read-words">${wordSpans(text)}</div></div>
+    <div class="row-buttons">${Listen.available() ? '<button class="mic-btn" onclick="aloudGo()" aria-label="Start reading">🎤</button>' : ''}<button class="btn sky" onclick="aloudHear()">🔊 Read it to me</button><button class="btn big" id="aloudNext" onclick="RA.i++;tabAloud()">Next sentence →</button></div>
+    <p id="playFeedback" class="feedback" aria-live="polite"></p><div id="aloudCheck"></div>`);
+  if (!Listen.available()) grownUpCheck(document.getElementById('aloudCheck'), () => aloudDone(1), () => {}, 'Grown-up check');
+}
+function wordSpans(text){ return text.split(' ').map(w => `<span class="w" onclick="speak(this.dataset.say)" data-say="${esc(w.replace(/[^\w']/g, ''))}">${esc(w)}</span>`).join(' '); }
+function aloudHear(){ const spans = [...document.querySelectorAll('#readWords .w')]; readLines(spans.map(s => s.dataset.say), spans, {gap:120}); }
+async function aloudGo(){
+  const spans = [...document.querySelectorAll('#readWords .w')];
+  const res = await listenRead(spans, document.getElementById('playFeedback'));
+  if (res !== null) aloudDone(res);
+}
+function aloudDone(score){
+  const fb = document.getElementById('playFeedback');
+  if (score >= .8){ fb.className = 'feedback good'; fb.textContent = '🌟 ' + pick(cheers) + ' You read the whole sentence!'; recordResult('reading', true, document.getElementById('readWords')); speak(pick(cheers) + ' Great reading!', {quiet:true}); document.getElementById('aloudNext').classList.add('primary'); }
+  else { fb.className = 'feedback bad'; fb.textContent = '💜 Good try! Tap the orange words to hear them, then try again.'; speak('Good try! Let’s practice the orange words.', {quiet:true}); }
+}
+/* Listen while she reads a set of word spans; marks words green in order. Resolves with the share of words read. */
+async function listenRead(spans, statusEl){
+  const target = spans.map(s => normWords(s.dataset.say)[0] || '');
+  spans.forEach(s => s.classList.remove('heard', 'missed'));
+  if (statusEl){ statusEl.className = 'feedback'; statusEl.textContent = 'Listening… start reading! 👂'; }
+  let got = 0;
+  const align = text => {
+    const heard = normWords(text); let p = 0;
+    for (const h of heard){ for (let k = p; k < Math.min(p + 3, target.length); k++){ if (wordMatches(h, target[k])){ p = k + 1; break; } } }
+    return p;
+  };
+  const res = await Listen.start({continuous:true, maxMs:Math.max(7000, target.length * 1400), onInterim: text => {
+    const p = align(text);
+    if (p > got){ got = p; spans.forEach((s, i) => s.classList.toggle('heard', i < got)); }
+    return got >= target.length;
+  }});
+  if (res.error === 'aborted' || !spans[0].isConnected) return null;
+  if (!got && res.error){ const m = micError(res.error); if (statusEl) statusEl.textContent = m || 'Let’s try again!'; return res.error === 'no-speech' ? null : (grownUpCheck(document.getElementById('aloudCheck') || statusEl, () => aloudDone(1), () => {}, 'Listening isn’t working here'), null); }
+  // count matches anywhere (she may skip around)
+  const heardAll = normWords(res.text + ' ' + res.alts.join(' '));
+  spans.forEach((s, i) => { const ok = i < got || heardAll.some(h => wordMatches(h, target[i])); s.classList.toggle('heard', ok); s.classList.toggle('missed', !ok); });
+  const n = spans.filter(s => s.classList.contains('heard')).length;
+  return n / spans.length;
+}
+
+/* Story page: let her read the story herself */
+async function storyReadMine(i){
+  const box = document.querySelector('.story-box');
+  const spans = [...box.querySelectorAll('.w')];
+  const fb = document.getElementById('storyFb');
+  const score = await listenRead(spans, fb);
+  if (score === null) return;
+  if (score >= .75){ fb.className = 'feedback good'; fb.textContent = `🌟 Wonderful reading! You read ${Math.round(score * 100)}% of the words.`; recordResult('reading', true, box); if (!saved.storiesRead[i]){ saved.storiesRead[i] = true; saveAll(); } confetti(18); speak('Wonderful reading!', {quiet:true}); }
+  else { fb.className = 'feedback bad'; fb.textContent = '💜 Good try! Tap the orange words to hear them, then read again.'; speak('Good try! Tap the orange words to hear them.', {quiet:true}); }
+}
+
+/* Extra question types for quizzes and the daily routine */
+function blendItem(){
+  const list = BLEND_WORDS.filter(w => (w[2] || 1) === 1), t = pick(list), others = shuffle(list.filter(w => w !== t)).slice(0, 2);
+  return {q:`Blend the sounds: ${t[0].join(' – ')}. Which picture?`, say:`Blend the sounds. ${t[0].map(soundOf).join('. ')}. Which picture is it?`, choices:shuffle([t, ...others]).map(w => `${w[1]} ${w[0].join('')}`), a:`${t[1]} ${t[0].join('')}`, explain:`${t[0].join(' - ')} makes ${t[0].join('')}.`};
+}
+
 /* ---------- start ---------- */
 Voice.init();
 saveAll();
 (function boot(){
   const p = new URLSearchParams(location.search), mode = p.get('mode');
-  if (!pageKey) return renderHome();
+  if (!pageKey) return mode === 'routine' ? renderRoutine() : mode === 'stickers' ? renderStickerBook() : renderHome();
   if (!subjects.some(s => s.key === pageKey)) return renderHome();
   if (mode === 'learn') return renderLearn(pageKey);
   if (mode === 'quiz') return renderQuiz(pageKey);
