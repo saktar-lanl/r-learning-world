@@ -387,3 +387,11 @@ table.dash th,table.dash td{text-align:left;padding:10px 8px;border-bottom:1px s
 details summary{cursor:pointer;font-weight:800;margin:6px 0}
 @keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(229,57,101,.6)}50%{box-shadow:0 0 0 18px rgba(229,57,101,0)}}
 @media (max-width:560px){.tile{min-width:66px;height:76px;font-size:42px}.blend-pic{font-size:60px}.read-card{flex-direction:column;text-align:center}}
+
+/* Skeleton */
+.skeleton-box{text-align:center}
+.skeleton-svg{max-width:340px;max-height:78vh;display:block;margin:auto}
+.bone-g{cursor:pointer;transition:filter .2s}
+.bone-g:hover{filter:brightness(.96) drop-shadow(0 0 4px #ffd27a)}
+.bone-g.sel{filter:drop-shadow(0 0 7px #ffc23d)}
+.bone-g:focus{outline:none}.bone-g:focus-visible{filter:drop-shadow(0 0 6px #6b46d6)}

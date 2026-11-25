@@ -495,6 +495,7 @@ const illustratedStories = [
 
 /* ---------- pictures (from the original site) ---------- */
 function bodySVG(active='head'){
+  if (active === 'bones') return skeletonSVG(activeBone, false);
   const hi = id => active===id ? '#ffb74d' : '#7fbee9';
   return `<svg viewBox="0 0 340 600" width="100%" aria-label="Kid-friendly body diagram">
     <circle cx="170" cy="82" r="48" fill="#ffd9c9" stroke="#80594a" stroke-width="2"/>
@@ -522,16 +523,6 @@ function bodySVG(active='head'){
     <rect x="36" y="286" width="44" height="38" rx="12" fill="transparent" stroke="${hi('hand')}" stroke-width="6"/>
     <rect x="126" y="278" width="78" height="174" rx="20" fill="transparent" stroke="${hi('leg')}" stroke-width="6"/>
     <rect x="120" y="442" width="102" height="38" rx="14" fill="transparent" stroke="${hi('foot')}" stroke-width="6"/>
-    <g opacity="${active==='bones' ? 1 : .32}">
-      <circle cx="275" cy="100" r="28" fill="#fff" stroke="#888" stroke-width="3"/>
-      <line x1="275" y1="128" x2="275" y2="240" stroke="#888" stroke-width="6"/>
-      <line x1="240" y1="155" x2="310" y2="155" stroke="#888" stroke-width="6"/>
-      <line x1="248" y1="155" x2="232" y2="210" stroke="#888" stroke-width="6"/>
-      <line x1="302" y1="155" x2="318" y2="210" stroke="#888" stroke-width="6"/>
-      <line x1="255" y1="240" x2="235" y2="325" stroke="#888" stroke-width="6"/>
-      <line x1="295" y1="240" x2="315" y2="325" stroke="#888" stroke-width="6"/>
-      <text x="275" y="355" text-anchor="middle" font-size="13" fill="#666">Simple skeleton</text>
-    </g>
   </svg>`;
 }
 function storyPicture(scene){
@@ -542,6 +533,76 @@ function storyPicture(scene){
  return `<svg class="story-art" viewBox="0 0 350 240" role="img" aria-label="Illustration for ${esc(scene)}"><rect width="350" height="240" fill="#dff3ff"/><circle cx="302" cy="40" r="24" fill="#ffe39a"/><path d="M0 190Q90 153 180 190T350 190V240H0Z" fill="#b9e5a9"/>${scenes[scene]}</svg>`;
 }
 function planetPicture(name){const colors={Mercury:['#d7d3cc','#77736e'],Venus:['#f6d692','#b77b45'],Earth:['#67c5fa','#2457a3'],Mars:['#f0a16b','#a94d38'],Jupiter:['#f6d9ad','#b98b68'],Saturn:['#fae5ad','#c5a26b'],Uranus:['#b5f1eb','#58a9b8'],Neptune:['#72a8ff','#244aaf']};let c=colors[name];let id='planet'+name;let detail='';if(name==='Earth') detail='<path d="M45 37L60 25 80 32 83 48 69 54 65 70 53 69 49 55 37 48Z M92 72L111 67 122 79 111 92 105 111 95 105 89 85Z M92 30L120 34 129 51 112 58 99 47Z" fill="#71bc79"/><path d="M28 61Q55 48 83 63M80 102Q112 91 130 103" stroke="#fff" stroke-width="7" opacity=".55" fill="none"/>';else if(['Jupiter','Saturn','Venus','Neptune','Uranus'].includes(name)) detail=Array.from({length:7},(_,i)=>`<path d="M15 ${33+i*15}Q80 ${46+i*15} 145 ${31+i*15}" stroke="${i%2?c[1]:'#fff3d9'}" opacity="${name==='Jupiter'?.56:.20}" stroke-width="${i%2?8:5}" fill="none"/>`).join('')+(name==='Jupiter'?'<ellipse cx="105" cy="92" rx="19" ry="8" fill="#bb644d"/>':'');else detail=Array.from({length:10},(_,i)=>`<circle cx="${36+(i*23)%83}" cy="${36+(i*31)%88}" r="${3+i%8}" fill="${c[1]}" opacity=".34"/>`).join('');return `<svg viewBox="0 0 160 160" class="planet-picture" role="img" aria-label="Illustration of ${name}"><defs><radialGradient id="${id}" cx="32%" cy="27%" r="74%"><stop stop-color="${c[0]}"/><stop offset="1" stop-color="${c[1]}"/></radialGradient><clipPath id="${id}clip"><circle cx="80" cy="80" r="56"/></clipPath></defs>${name==='Saturn'?'<ellipse cx="80" cy="80" rx="78" ry="22" transform="rotate(-22 80 80)" stroke="#e6c98a" stroke-width="12" fill="none"/>':''}<circle cx="80" cy="80" r="56" fill="url(#${id})"/><g clip-path="url(#${id}clip)">${detail}</g>${name==='Saturn'?'<path d="M7 103Q61 117 148 53" stroke="#f5d9a1" stroke-width="8" fill="none" opacity=".9"/>':''}</svg>`;}
+
+/* ---------- Skeleton: a friendly cartoon skeleton with tappable bones ---------- */
+const BONES = [
+  {id:'skull', name:'Skull', fact:'Your skull is like a helmet. It protects your brain.'},
+  {id:'jaw', name:'Jaw', fact:'Your jaw is the only bone in your head that moves. It helps you chew and talk.'},
+  {id:'spine', name:'Spine (backbone)', fact:'Your spine is a stack of small bones. It holds you up and lets you bend and twist.'},
+  {id:'collar', name:'Collarbones', fact:'Your collarbones join your arms to your body. You can feel them just below your neck.'},
+  {id:'ribs', name:'Ribs', fact:'Your ribs make a cage that protects your heart and lungs. Most people have 12 pairs of ribs.'},
+  {id:'arm', name:'Arm bones', fact:'Your upper arm has one bone. Your lower arm has two bones side by side.'},
+  {id:'hand', name:'Hand bones', fact:'Each hand has 27 bones! That is why your fingers can move in so many ways.'},
+  {id:'pelvis', name:'Hip bones', fact:'Your hip bones are shaped like a bowl. They join your legs to your spine.'},
+  {id:'leg', name:'Thigh bone', fact:'Your thigh bone is the biggest and strongest bone in your body!'},
+  {id:'knee', name:'Kneecap', fact:'Your kneecap is a small round bone that protects the front of your knee.'},
+  {id:'shin', name:'Shin bones', fact:'Your lower leg has two bones. The big one in front is your shin bone.'},
+  {id:'foot', name:'Foot bones', fact:'Each foot has 26 bones that help you stand, walk and jump.'}
+];
+const BONE_FUN = [
+  ['🦴','206 bones','Grown-ups have 206 bones. Babies have about 300, and some join together as they grow.'],
+  ['👂','The tiniest bone','The smallest bone in your body is inside your ear. It is about as big as a grain of rice!'],
+  ['🥛','Strong bones','Milk, yogurt, cheese and leafy greens help build strong bones. So do running and jumping!'],
+  ['🩹','Bones can heal','If a bone breaks, your body can grow new bone to fix it. A cast keeps it still while it heals.']
+];
+let activeBone = 'skull';
+function cartoonBone(x1, y1, x2, y2, w, fill, line){
+  const L = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / L, ny = (x2 - x1) / L, o = w * .42, r = w * .62;
+  const knobs = [[x1 + nx * o, y1 + ny * o], [x1 - nx * o, y1 - ny * o], [x2 + nx * o, y2 + ny * o], [x2 - nx * o, y2 - ny * o]];
+  const layer = (c, extra) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w + extra}" stroke-linecap="round"/>` + knobs.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + extra / 2).toFixed(1)}" fill="${c}"/>`).join('');
+  return layer(line, 5) + layer(fill, 0);
+}
+function skeletonSVG(active, clickable){
+  const F = id => active === id ? '#ffd27a' : '#fffaf0', O = id => active === id ? '#e0952a' : '#a8997f';
+  const B = (id, x1, y1, x2, y2, w) => cartoonBone(x1, y1, x2, y2, w, F(id), O(id));
+  const both = fn => fn(x => x) + fn(x => 300 - x); // draw left side, then mirror it
+  const g = (id, inner) => { const b = BONES.find(x => x.id === id); return `<g class="bone-g ${active === id ? 'sel' : ''}" ${clickable ? `onclick="pickBone('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pickBone('${id}')}" role="button" tabindex="0" aria-label="${b.name}"` : ''}><title>${b.name}</title>${inner}</g>`; };
+  const ribOuter = [114, 106, 101, 99, 100, 104];
+  const parts = [
+    g('pelvis', `<path d="M150 356 C128 343 97 343 97 372 C97 399 124 409 140 398 L150 405 L160 398 C176 409 203 399 203 372 C203 343 172 343 150 356 Z" fill="${F('pelvis')}" stroke="${O('pelvis')}" stroke-width="3"/><ellipse cx="127" cy="384" rx="9" ry="7" fill="#eef9ff" stroke="${O('pelvis')}" stroke-width="2"/><ellipse cx="173" cy="384" rx="9" ry="7" fill="#eef9ff" stroke="${O('pelvis')}" stroke-width="2"/>`),
+    g('spine', Array.from({length:19}, (_, i) => `<rect x="${i < 3 ? 143 : 141}" y="${128 + i * 12}" width="${i < 3 ? 14 : 18}" height="9" rx="4" fill="${F('spine')}" stroke="${O('spine')}" stroke-width="2"/>`).join('')),
+    g('ribs', ribOuter.map((ox, i) => { const y = 164 + i * 15, d = X => `M${X(146)} ${y} C${X(128)} ${y - 7} ${X(ox)} ${y - 5} ${X(ox)} ${y + 12} C${X(ox)} ${y + 20} ${X(ox + 3)} ${y + 24} ${X(ox + 6)} ${y + 27}`;
+      return both(X => `<path d="${d(X)}" fill="none" stroke="${O('ribs')}" stroke-width="8.5" stroke-linecap="round"/><path d="${d(X)}" fill="none" stroke="${F('ribs')}" stroke-width="4" stroke-linecap="round"/>`); }).join('') + `<rect x="143" y="156" width="14" height="80" rx="7" fill="${F('ribs')}" stroke="${O('ribs')}" stroke-width="2.5"/>`),
+    g('collar', both(X => B('collar', X(143), 150, X(97), 149, 7))),
+    g('arm', both(X => B('arm', X(100), 158, X(86), 262, 10) + B('arm', X(84), 274, X(73), 364, 6.5) + B('arm', X(94), 275, X(85), 365, 5.5))),
+    g('hand', both(X => `<ellipse cx="${X(79)}" cy="${377}" rx="12" ry="7" fill="${F('hand')}" stroke="${O('hand')}" stroke-width="2.5"/>` + [[70, 63], [76, 71], [82, 80], [88, 89]].map(([a, b]) => B('hand', X(a), 388, X(b), 414, 3.4)).join('') + B('hand', X(69), 381, X(57), 397, 3.4))),
+    g('leg', both(X => B('leg', X(131), 404, X(125), 528, 12))),
+    g('knee', both(X => `<circle cx="${X(125)}" cy="540" r="8.5" fill="${F('knee')}" stroke="${O('knee')}" stroke-width="3"/>`)),
+    g('shin', both(X => B('shin', X(123), 553, X(121), 658, 10) + B('shin', X(136), 557, X(134), 654, 5))),
+    g('foot', both(X => `<ellipse cx="${X(124)}" cy="672" rx="11" ry="8" fill="${F('foot')}" stroke="${O('foot')}" stroke-width="2.5"/>` + [[118, 96, 680], [120, 99, 688], [123, 104, 695]].map(([a, b, y]) => B('foot', X(a), 674, X(b), y, 3.6)).join(''))),
+    g('jaw', `<path d="M117 97 Q119 130 150 132 Q181 130 183 97 Q166 109 150 109 Q134 109 117 97 Z" fill="${F('jaw')}" stroke="${O('jaw')}" stroke-width="3"/>` + Array.from({length:6}, (_, i) => `<rect x="${133 + i * 6}" y="108" width="5" height="7" rx="1.5" fill="#fff" stroke="${O('jaw')}" stroke-width="1"/>`).join('')),
+    g('skull', `<path d="M150 12 C100 12 96 58 106 84 C110 96 118 104 126 104 L174 104 C182 104 190 96 194 84 C204 58 200 12 150 12 Z" fill="${F('skull')}" stroke="${O('skull')}" stroke-width="3"/><ellipse cx="131" cy="66" rx="13" ry="15" fill="#4a3d5c"/><ellipse cx="169" cy="66" rx="13" ry="15" fill="#4a3d5c"/><circle cx="127" cy="61" r="3" fill="#fff" opacity=".7"/><circle cx="165" cy="61" r="3" fill="#fff" opacity=".7"/><path d="M150 82 l-7 13 h14 z" fill="#4a3d5c"/>` + Array.from({length:6}, (_, i) => `<rect x="${133 + i * 6}" y="98" width="5" height="7" rx="1.5" fill="#fff" stroke="${O('skull')}" stroke-width="1"/>`).join(''))
+  ];
+  return `<svg class="skeleton-svg" viewBox="0 0 300 712" width="100%" role="img" aria-label="Cartoon skeleton">${parts.join('')}</svg>`;
+}
+function skeletonPanel(){
+  const b = BONES.find(x => x.id === activeBone) || BONES[0];
+  return `<div class="body-wrap">
+      <div class="svg-box skeleton-box" id="skelBox">${skeletonSVG(activeBone, true)}</div>
+      <div>
+        <div class="fact" id="boneFact"><h3>🦴 ${esc(b.name)}</h3><p style="font-size:22px">${esc(b.fact)}</p><div class="row-buttons">${speakBtn(b.name + '. ' + b.fact, 'Listen')}</div></div>
+        <div class="label-list" id="boneBtns">${BONES.map(x => `<button class="body-btn ${x.id === activeBone ? 'active' : ''}" data-bone="${x.id}" onclick="pickBone('${x.id}')">${esc(x.name)}</button>`).join('')}</div>
+        <div class="grid lesson-grid">${BONE_FUN.map(([em, t, f]) => `<div class="lesson-card"><span class="big-emoji">${em}</span><h3>${t}</h3><p>${f}</p><div class="row-buttons">${speakBtn(f, 'Listen')}</div></div>`).join('')}</div>
+      </div>
+    </div>`;
+}
+function pickBone(id){
+  activeBone = id; const b = BONES.find(x => x.id === id);
+  const box = document.getElementById('skelBox'); if (box) box.innerHTML = skeletonSVG(id, true);
+  const f = document.getElementById('boneFact'); if (f) f.innerHTML = `<h3>🦴 ${esc(b.name)}</h3><p style="font-size:22px">${esc(b.fact)}</p><div class="row-buttons">${speakBtn(b.name + '. ' + b.fact, 'Listen')}</div>`;
+  document.querySelectorAll('#boneBtns .body-btn').forEach(x => x.classList.toggle('active', x.dataset.bone === id));
+  Sfx.tap(); speak(b.name + '. ' + b.fact, {quiet:true});
+}
 
 /* ---------- navigation (each subject has its own page) ---------- */
 const pageKey = document.body.dataset.subject || '';
@@ -683,9 +744,10 @@ function makeQuiz(key){
   }
   if (key === 'body'){
     const ask = bodyParts.filter(x => x.id !== 'bones');
-    return shuffle(ask).slice(0, 5).map((t, i) => i < 3
+    const bone = pick(BONES), boneQ = {q:'Which bone is glowing?', html:`<div class="svg-box skeleton-box" style="max-width:240px">${skeletonSVG(bone.id, false)}</div>`, choices:shuffle([bone.name, ...shuffle(BONES.filter(x => x.id !== bone.id)).slice(0, 2).map(x => x.name)]), a:bone.name, explain:bone.fact};
+    return shuffle(shuffle(ask).slice(0, 4).map((t, i) => i < 2
       ? {q:'Which body part is glowing orange?', html:`<div class="svg-box" style="max-width:300px">${bodySVG(t.id)}</div>`, choices:shuffle([t.name, ...shuffle(ask.filter(x => x.id !== t.id)).slice(0, 2).map(x => x.name)]), a:t.name, explain:t.fact}
-      : {q:'Which body part? ' + blankFact(t.fact), say:'Which body part? ' + blankFact(t.fact).replace('___','blank'), choices:shuffle([t.name, ...shuffle(ask.filter(x => x.id !== t.id)).slice(0, 2).map(x => x.name)]), a:t.name, explain:t.fact});
+      : {q:'Which body part? ' + blankFact(t.fact), say:'Which body part? ' + blankFact(t.fact).replace('___','blank'), choices:shuffle([t.name, ...shuffle(ask.filter(x => x.id !== t.id)).slice(0, 2).map(x => x.name)]), a:t.name, explain:t.fact}).concat([boneQ]));
   }
   return shuffle(quizBank[key] || []).slice(0, 5).map(q => ({...q, choices:shuffle(q.choices)}));
 }
@@ -942,13 +1004,15 @@ function renderBodyLearn(){
   <section class="panel">
     <div class="section-title"><h1>🧍 Learn: Human body</h1>${speakBtn('Tap a body part to learn about it.')}</div>
     <div class="body-wrap">
-      <div class="svg-box">${bodySVG(activeBodyPart)}<div class="skeleton-tip">🦴 Tap <strong>Bones / Skeleton</strong> to see a simple skeleton.</div></div>
+      <div class="svg-box">${bodySVG(activeBodyPart)}<div class="skeleton-tip">🦴 Tap <strong>Bones / Skeleton</strong>, or explore every bone in the <a href="#skeleton" onclick="document.getElementById('skeleton').scrollIntoView({behavior:'smooth'});return false">Skeleton explorer</a> below.</div></div>
       <div>
         <div class="fact"><h3>${p.name}</h3><p style="font-size:22px">${p.fact}</p><div class="row-buttons">${speakBtn(p.name + '. ' + p.fact, 'Listen')}</div></div>
         <div class="label-list">${bodyParts.map(x => `<button class="body-btn ${x.id === activeBodyPart ? 'active' : ''}" onclick="pickBodyPart('${x.id}')">${x.name}</button>`).join('')}</div>
       </div>
     </div>
   </section>
+  <section class="panel" id="skeleton"><div class="section-title"><h2>🦴 Skeleton explorer</h2><span class="pill">Tap a bone!</span></div>
+    <p class="muted">Your skeleton is all the bones inside your body. Tap a bone on the picture or a name to learn about it.</p>${skeletonPanel()}</section>
   <section class="panel"><h2>📖 Body facts</h2>${lessonCards(lessons.body)}</section>`);
 }
 function pickBodyPart(id){ activeBodyPart = id; const y = window.scrollY; renderBodyLearn(); window.scrollTo(0, y); const p = bodyParts.find(x => x.id === id); speak(p.name + '. ' + p.fact, {quiet:true}); }
