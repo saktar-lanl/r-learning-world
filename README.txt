@@ -1,0 +1,1 @@
+Upload all 15 website files (index.html, 12 subject HTML pages, app.js, style.css) to the root of your existing GitHub Pages repository. Keep the same filenames. Do not upload the ZIP itself. Existing browser progress uses the previous storage keys. Map boundaries require internet; voice depends on device voices. All other activities are local.
