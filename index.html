@@ -164,7 +164,7 @@ function pickVoice(lang){ const voices=('speechSynthesis' in window)?speechSynth
   return candidates.find(v=>femaleNames.test(v.name)) || candidates.find(v=>v.lang.toLowerCase()===tag) || candidates[0] || null;
 }
 function speak(text, lang='en-US'){
-  if(!voicePrefs.audio || !('speechSynthesis' in window)) return;
+  if(!voicePrefs.audio || !('speechSynthesis' in window)) return; if(lang.startsWith('bn')&&!pickVoice(lang)){toast('বাংলা ভয়েস পাওয়া যায়নি।');return;}
   stopSpeaking();
   const token=++speechToken;
   const chunks=String(text).split(/(?<=[.!?।])\s+/).filter(Boolean);
@@ -183,7 +183,17 @@ function speak(text, lang='en-US'){
   }
   run();
 }
-function speakBangla(text){ speak(text,'bn-BD'); }
+let bnManifest=null;
+async function speakBangla(text){
+ if(!voicePrefs.audio)return; stopSpeaking(); const token=speechToken;
+ const key=String(text).trim().normalize('NFC');
+ try{if(!bnManifest){const r=await fetch('bangla-audio/manifest.json');if(!r.ok)throw Error('missing');bnManifest=await r.json();}
+ if(token!==speechToken)return;
+ const parts=bnManifest[key]?[key]:key.split(/\n|(?<=।)\s+/).map(x=>x.trim()).filter(Boolean);
+ if(parts.length&&parts.every(x=>bnManifest[x])){let i=0;function next(){if(token!==speechToken||i>=parts.length)return;currentAudio=new Audio('bangla-audio/'+bnManifest[parts[i++]]);currentAudio.playbackRate=voicePrefs.speed===.58?.8:voicePrefs.speed===.82?1:.9;currentAudio.preservesPitch=true;currentAudio.onended=()=>setTimeout(next,500);currentAudio.onerror=()=>toast('বাংলা অডিও পাওয়া যায়নি');currentAudio.play().catch(()=>toast('আবার শুনুন বোতাম চাপুন'));}next();return;}}
+ catch(e){} if(token!==speechToken)return;
+ if(pickVoice('bn-BD'))speak(key,'bn-BD');else toast('বাংলা অডিও এখনো যোগ করা হয়নি।');
+}
 
 const subjects=[
   {key:'reading', emoji:'📚', title:'Reading & phonics', desc:'Stories, sounds and sight words', color:'#ffe7ef'},
@@ -362,7 +372,7 @@ function statsOverview(){
 }
 
 function goHome(){
-  setResume({page:'home'});
+  stopSpeaking();
   const subjectCards=subjects.map(s=>`
     <button class="subject-card" style="background:${s.color}" onclick="openSubject('${s.key}')">
       <span class="emoji">${s.emoji}</span>
@@ -460,7 +470,7 @@ function startLearn(key){
   const list=lessons[key]||[];
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('${key}')">← ${esc(subjects.find(s=>s.key===key).title)}</button></div>
   <section class="panel"><div class="section-title"><h1>📘 Learn: ${esc(subjects.find(s=>s.key===key).title)}</h1><button class="btn small" onclick="speak('Welcome to ${subjects.find(s=>s.key===key).title}. Let us learn together!')">🔊 Listen</button></div>
-    <div class="grid lesson-grid">${list.map((x,i)=>`<div class="lesson-card"><h3>${esc(x.title)}</h3><div style="white-space:pre-wrap">${esc(x.text)}</div><div class="row-buttons"><button class="btn small secondary" onclick="${key==='bangla' ? `speakBangla(${JSON.stringify(x.listen)})` : `speak(${JSON.stringify(x.listen)})`} ">🔊 Read aloud</button>${key==='english'&&x.title==='Writing prompt'?'<button class="btn small" onclick="openWriting()">✍️ Open writing box</button>':''}</div></div>`).join('')}</div>
+    <div class="grid lesson-grid">${list.map((x,i)=>`<div class="lesson-card"><h3>${esc(x.title)}</h3><div style="white-space:pre-wrap">${esc(x.text)}</div><div class="row-buttons"><button class="btn small secondary" onclick="${key==='bangla' ? `speakBangla(${esc(JSON.stringify(x.listen))})` : `speak(${esc(JSON.stringify(x.listen))})`} ">🔊 Read aloud</button>${key==='english'&&x.title==='Writing prompt'?'<button class="btn small" onclick="openWriting()">✍️ Open writing box</button>':''}</div></div>`).join('')}</div>
   </section>`;
 }
 
@@ -478,7 +488,7 @@ function renderQuizCard(){
   if(!q){ return quizDone(); }
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('${currentQuiz.subject}')">← ${esc(subjects.find(s=>s.key===currentQuiz.subject).title)}</button></div>
   <section class="panel">
-    <div class="section-title"><h1>📝 Quiz: ${esc(subjects.find(s=>s.key===currentQuiz.subject).title)}</h1><button class="btn small" onclick="speak(${JSON.stringify(q.q)})">🔊 Read question</button></div>
+    <div class="section-title"><h1>📝 Quiz: ${esc(subjects.find(s=>s.key===currentQuiz.subject).title)}</h1><button class="btn small" onclick="${/[\u0980-\u09ff]/.test(q.q)?'speakBangla':'speak'}(${esc(JSON.stringify(q.q))})">🔊 Read question</button></div>
     <div class="progress"><i style="width:${Math.round((currentQuiz.index/currentQuiz.items.length)*100)}%"></i></div>
     <h2>${esc(q.q)}</h2>
     <div class="choice-grid">${q.choices.map(c=>`<button class="choice" onclick="answerQuiz(${JSON.stringify(c).replace(/"/g,'&quot;')})">${esc(c)}</button>`).join('')}</div>
@@ -489,8 +499,8 @@ function answerQuiz(ans){
   const q=currentQuiz.items[currentQuiz.index];
   const buttons=[...document.querySelectorAll('.choice')];
   buttons.forEach(b=>{b.disabled=true; if(b.textContent===q.a)b.classList.add('good'); if(b.textContent===ans && ans!==q.a)b.classList.add('bad');});
-  const ok=ans===q.a; if(ok) currentQuiz.right++; recordResult(currentQuiz.subject, ok); document.getElementById('feedback').textContent=(ok?'Great job! ':'Not quite. ')+q.explain;
-  const read=(ok?'Wonderful! ':'Let us learn. ')+q.explain; if(currentQuiz.subject==='bangla') speakBangla(read); else speak(read);
+  const ok=ans===q.a; if(ok) currentQuiz.right++; recordResult(currentQuiz.subject, ok); document.getElementById('feedback').textContent=(ok?'Great job! ':'Not quite. ')+(q.explain||q.ex||'');
+  const read=(ok?'Wonderful! ':'Let us learn. ')+(q.explain||q.ex||''); if(currentQuiz.subject==='bangla') speakBangla(ok?'বাহ! তুমি খুব ভালো করেছ।':'আবার চেষ্টা করো।'); else speak(read);
   setTimeout(()=>{ currentQuiz.index++; renderQuizCard(); }, 1400);
 }
 function quizDone(){
@@ -610,7 +620,7 @@ function renderRhymes(){
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('rhymes')">← Rhymes</button></div>
   <section class="panel"><div class="section-title"><h1>🎵 Learn: Rhymes</h1><span class="pill">English + Bangla</span></div>
     <div class="tabs"><button class="tab active" onclick="renderRhymes()">English rhymes</button><button class="tab" onclick="renderBanglaRhymes()">বাংলা ছড়া</button></div>
-    <div class="grid lesson-grid">${EN_RHYMES.map(r=>`<div class="rhyme-card"><h3>${esc(r.title)}</h3><pre>${esc(r.text)}</pre><div class="row-buttons"><button class="btn small secondary" onclick="speak(${JSON.stringify(r.text)})">🔊 Read slowly</button></div></div>`).join('')}</div>
+    <div class="grid lesson-grid">${EN_RHYMES.map(r=>`<div class="rhyme-card"><h3>${esc(r.title)}</h3><pre>${esc(r.text)}</pre><div class="row-buttons"><button class="btn small secondary" onclick="speak(${esc(JSON.stringify(r.text))})">🔊 Read slowly</button></div></div>`).join('')}</div>
   </section>`;
 }
 function renderBanglaRhymes(){
@@ -618,7 +628,7 @@ function renderBanglaRhymes(){
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('rhymes')">← Rhymes</button></div>
   <section class="panel"><div class="section-title"><h1>🎵 বাংলা ছড়া</h1><button class="btn small" onclick="speakBangla('চলো, বাংলা ছড়া শিখি!')">🔊 Listen</button></div>
     <div class="tabs"><button class="tab" onclick="renderRhymes()">English rhymes</button><button class="tab active" onclick="renderBanglaRhymes()">বাংলা ছড়া</button></div>
-    <div class="grid lesson-grid">${BN_RHYMES.map(r=>`<div class="rhyme-card"><h3>${esc(r.title)}</h3><pre>${esc(r.text)}</pre><div class="row-buttons"><button class="btn small secondary" onclick="speakBangla(${JSON.stringify(r.text)})">🔊 আস্তে পড়ো</button></div></div>`).join('')}</div>
+    <div class="grid lesson-grid">${BN_RHYMES.map(r=>`<div class="rhyme-card"><h3>${esc(r.title)}</h3><pre>${esc(r.text)}</pre><div class="row-buttons"><button class="btn small secondary" onclick="speakBangla(${esc(JSON.stringify(r.text))})">🔊 আস্তে পড়ো</button></div></div>`).join('')}</div>
   </section>`;
 }
 function renderRhymesQuiz(){
@@ -632,12 +642,12 @@ function renderRhymesQuiz(){
 
 function renderBanglaLearn(){
   setResume({page:'lesson',subject:'bangla'});
-  const vowels=['অ','আ','ই','ঈ','উ','ঊ','এ','ঐ','ও','ঔ'];
+  const vowels=['অ','আ','ই','ঈ','উ','ঊ','ঋ','এ','ঐ','ও','ঔ'];
   const words=[['আম','Mango'],['ফুল','Flower'],['মাছ','Fish'],['বই','Book'],['চাঁদ','Moon'],['পাখি','Bird']];
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('bangla')">← Bangla</button></div>
   <section class="panel">
     <div class="section-title"><h1>🇧🇩 Learn: Bangla</h1><button class="btn small" onclick="speakBangla('চলো, বাংলা শিখি!')">🔊 শুনি</button></div>
-    <p class="muted">I added stronger Bengali voice preference and slower speech. On some devices a true native female Bangla voice may still depend on the voices installed on that device.</p>
+    <p class="muted">Tap a letter or word to listen. Prerecorded Bangla audio is preferred when available.</p>
     <h3>স্বরবর্ণ</h3>
     <div class="alphabet-grid">${vowels.map(v=>`<button onclick="speakBangla('${v}')">${v}</button>`).join('')}</div>
     <h3 style="margin-top:18px">শব্দ</h3>
