@@ -111,9 +111,9 @@
       </div>
     </div>
     <div class="top-actions">
-      <button class="btn small gold" id="starsBtn">⭐ 0</button>
+      <button class="btn small gold" id="starsBtn" onclick="openDashboard()">⭐ 0</button>
       <button class="btn small" onclick="goHome()">🏠 Home</button>
-      <button class="btn small" onclick="renderSettings()">⚙️ Settings</button>
+      <button class="btn small" onclick="stopSpeaking()">🔇 Stop voice</button><button class="btn small" onclick="renderSettings()">⚙️ Settings</button>
     </div>
   </div>
 </header>
@@ -153,48 +153,16 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 function esc(s){return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function statFor(k){return saved.stats[k]||{right:0,total:0}}
 function streak(){ const keys=Object.keys(saved.days).sort(); if(!keys.length) return 0; let s=0; let d=new Date(); while(true){ const key=d.toISOString().slice(0,10); if(saved.days[key]){s++; d.setDate(d.getDate()-1);} else break;} return s; }
-function accuracy(){ const vals=Object.values(saved.stats); let r=0,t=0; vals.forEach(v=>{r+=v.right||0;t+=v.total||0}); return t?Math.round(r*100/t):0 }
+function accuracy(){ const vals=Object.entries(saved.stats).filter(([k])=>k!=='bangla').map(([,v])=>v); let r=0,t=0; vals.forEach(v=>{r+=v.right||0;t+=v.total||0}); return t?Math.round(r*100/t):0 }
 function recordResult(subject, ok){ if(!saved.stats[subject]) saved.stats[subject]={right:0,total:0}; saved.stats[subject].total++; if(ok) saved.stats[subject].right++; if(ok){ saved.stars=(saved.stars||0)+1; toast('⭐ Great job! +1 star'); } trackDay(); saveAll(); }
-function setResume(page){saved.resume=page; saveAll();}
+function setResume(page){stopSpeaking();saved.resume=page; saveAll();}
 function stopSpeaking(){ speechToken++; try{speechSynthesis.cancel()}catch(e){} if(currentAudio){try{currentAudio.pause()}catch(e){} currentAudio=null} }
-function pickVoice(lang){ const voices=('speechSynthesis' in window)?speechSynthesis.getVoices():[]; const tag=lang.toLowerCase(); const candidates=voices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(tag.slice(0,2)));
-  const femaleNames = lang.startsWith('bn')
-    ? /female|bangla|bengali|google বাংলা|google bengali|android|sangeeta|meera|priya|nisha|anika|tithi|tania/i
-    : /female|samantha|karen|aria|jenny|zira|susan|serena|moira|ava|siri voice 4|google us english/i;
-  return candidates.find(v=>femaleNames.test(v.name)) || candidates.find(v=>v.lang.toLowerCase()===tag) || candidates[0] || null;
-}
-function speak(text, lang='en-US'){
-  if(!voicePrefs.audio || !('speechSynthesis' in window)) return; if(lang.startsWith('bn')&&!pickVoice(lang)){toast('বাংলা ভয়েস পাওয়া যায়নি।');return;}
-  stopSpeaking();
-  const token=++speechToken;
-  const chunks=String(text).split(/(?<=[.!?।])\s+/).filter(Boolean);
-  const voice = pickVoice(lang);
-  let i=0;
-  function run(){
-    if(token!==speechToken || i>=chunks.length) return;
-    const u=new SpeechSynthesisUtterance(chunks[i++]);
-    u.lang=lang;
-    u.rate=voicePrefs.speed;
-    u.pitch=lang.startsWith('bn') ? Math.max(1.0, voicePrefs.pitch-0.02) : voicePrefs.pitch;
-    u.volume=1;
-    if(voice) u.voice=voice;
-    u.onend=()=> setTimeout(run, 450);
-    try{ speechSynthesis.speak(u); }catch(e){}
-  }
-  run();
-}
-let bnManifest=null;
-async function speakBangla(text){
- if(!voicePrefs.audio)return; stopSpeaking(); const token=speechToken;
- const key=String(text).trim().normalize('NFC');
- try{if(!bnManifest){const r=await fetch('bangla-audio/manifest.json');if(!r.ok)throw Error('missing');bnManifest=await r.json();}
- if(token!==speechToken)return;
- const parts=bnManifest[key]?[key]:key.split(/\n|(?<=।)\s+/).map(x=>x.trim()).filter(Boolean);
- if(parts.length&&parts.every(x=>bnManifest[x])){let i=0;function next(){if(token!==speechToken||i>=parts.length)return;currentAudio=new Audio('bangla-audio/'+bnManifest[parts[i++]]);currentAudio.playbackRate=voicePrefs.speed===.58?.8:voicePrefs.speed===.82?1:.9;currentAudio.preservesPitch=true;currentAudio.onended=()=>setTimeout(next,500);currentAudio.onerror=()=>toast('বাংলা অডিও পাওয়া যায়নি');currentAudio.play().catch(()=>toast('আবার শুনুন বোতাম চাপুন'));}next();return;}}
- catch(e){} if(token!==speechToken)return;
- if(pickVoice('bn-BD'))speak(key,'bn-BD');else toast('বাংলা অডিও এখনো যোগ করা হয়নি।');
-}
-
+let activeUtterance=null,lastSpoken='';
+function englishVoices(){return 'speechSynthesis' in window?speechSynthesis.getVoices().filter(v=>/^en([-_]|$)/i.test(v.lang)):[]}
+function pickVoice(){const vs=englishVoices();return vs.find(v=>v.voiceURI===voicePrefs.voiceURI)||vs.find(v=>/enhanced|premium|natural/i.test(v.name)&&v.lang==='en-US')||vs.find(v=>/samantha|ava|jenny|aria|google us english/i.test(v.name)&&v.lang==='en-US')||vs.find(v=>v.lang==='en-US'&&v.default)||vs.find(v=>v.lang==='en-US')||vs[0]||null}
+function speak(text){lastSpoken=String(text);if(!voicePrefs.audio){toast('Sound is off. Turn it on in Settings.');return}if(!('speechSynthesis' in window)){toast('Speech is unavailable in this browser.');return}stopSpeaking(); const token=speechToken; const synth=window.speechSynthesis;const u=new SpeechSynthesisUtterance(lastSpoken.replace(/\n/g,'. ').replace(/\s*\+\s*/g,' plus ').replace(/\s*=\s*/g,' equals '));const v=pickVoice();u.lang=v?v.lang:'en-US';if(v)u.voice=v;u.rate=Number(voicePrefs.speed)||.8;u.pitch=Number(voicePrefs.pitch)||1;u.volume=1;activeUtterance=u;u.onerror=e=>{if(token===speechToken&&!['canceled','interrupted'].includes(e.error))toast('Voice could not play. Try another voice in Settings.')};u.onend=()=>{if(token===speechToken)activeUtterance=null};try{synth.resume();synth.speak(u)}catch(e){toast('Speech is unavailable. Try another browser.')}}
+function refreshVoices(){const el=document.getElementById('voiceChoice');if(!el)return;const vs=englishVoices();el.innerHTML='<option value="">Automatic English voice</option>'+vs.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');el.value=voicePrefs.voiceURI||'';}
+if('speechSynthesis' in window){speechSynthesis.addEventListener('voiceschanged',refreshVoices)}
 const subjects=[
   {key:'reading', emoji:'📚', title:'Reading & phonics', desc:'Stories, sounds and sight words', color:'#ffe7ef'},
   {key:'math', emoji:'🧮', title:'Math', desc:'Addition, subtraction and number sense', color:'#e0f7e8'},
@@ -205,10 +173,9 @@ const subjects=[
   {key:'school', emoji:'🎯', title:'School practice', desc:'Mixed kindergarten practice', color:'#dfe9ff'},
   {key:'general', emoji:'💡', title:'General knowledge', desc:'Seasons, calendar and everyday facts', color:'#ffe8d7'},
   {key:'geo', emoji:'🌍', title:'Geography', desc:'USA states and Bangladesh map', color:'#d9f6ef'},
-  {key:'rhymes', emoji:'🎵', title:'Rhymes', desc:'English and Bangla rhymes', color:'#fff3c9'},
+  {key:'rhymes', emoji:'🎵', title:'Rhymes', desc:'English nursery rhymes', color:'#fff3c9'},
   {key:'art', emoji:'🎨', title:'Art & creativity', desc:'Draw, color and create', color:'#ffe4f1'},
   {key:'chess', emoji:'♟️', title:'Chess', desc:'Learn how pieces move', color:'#ece9ff'},
-  {key:'bangla', emoji:'🇧🇩', title:'Bangla', desc:'বাংলা বর্ণ, শব্দ ও বাক্য', color:'#dff6e7'}
 ];
 
 const lessons={
@@ -249,11 +216,6 @@ const lessons={
   general:[
     {title:'Seasons', text:'The four seasons are spring, summer, fall and winter.', listen:'The four seasons are spring, summer, fall, and winter.'},
     {title:'Weekdays', text:'Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.', listen:'Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.'}
-  ],
-  bangla:[
-    {title:'বাংলা স্বরবর্ণ', text:'অ আ ই ঈ উ ঊ ঋ এ ঐ ও ঔ', listen:'অ, আ, ই, ঈ, উ, ঊ, ঋ, এ, ঐ, ও, ঔ'},
-    {title:'সহজ শব্দ', text:'আম, ফুল, মাছ, বই, খাতা, পাখি', listen:'আম, ফুল, মাছ, বই, খাতা, পাখি'},
-    {title:'সহজ বাক্য', text:'আমি স্কুলে যাই।\nআমি বই পড়ি।\nআমি বাংলা শিখি।', listen:'আমি স্কুলে যাই। আমি বই পড়ি। আমি বাংলা শিখি।'}
   ]
 };
 
@@ -294,11 +256,6 @@ const quizzes={
   general:[
     {q:'How many seasons are there?', choices:['2','4','8'], a:'4', explain:'There are four seasons.'},
     {q:'Which comes after Monday?', choices:['Sunday','Tuesday','Friday'], a:'Tuesday', explain:'Tuesday comes after Monday.'}
-  ],
-  bangla:[
-    {q:'"আম" এর ইংরেজি কী?', choices:['Book','Mango','Fish'], a:'Mango', explain:'আম means mango.'},
-    {q:'বাংলা স্বরবর্ণ কোনটি?', choices:['ক','আ','গ'], a:'আ', explain:'আ is a vowel.'},
-    {q:'"আমি বই পড়ি" means...', choices:['I read a book','I run fast','I draw a sun'], a:'I read a book', explain:'আমি বই পড়ি means I read a book.'}
   ]
 };
 
@@ -307,26 +264,20 @@ const EN_RHYMES=[
   {title:'Rain, Rain, Go Away', text:`Rain, rain, go away,\nCome again another day.\nLittle children want to play,\nRain, rain, go away.`},
   {title:'One, Two, Buckle My Shoe', text:`One, two, buckle my shoe,\nThree, four, shut the door,\nFive, six, pick up sticks,\nSeven, eight, lay them straight.`}
 ];
-const BN_RHYMES=[
-  {title:'আয় আয় চাঁদ মামা', text:`আয় আয় চাঁদ মামা\nটিপ দিয়ে যা,\nচাঁদের কপালে চাঁদ টিপ\nদিয়ে দিয়ে যা।`},
-  {title:'হাট্টিমা টিম টিম', text:`হাট্টিমা টিম টিম\nতারা মাঠে পাড়ে ডিম,\nতাদের খাড়া দুইটা শিং\nতারা হাট্টিমা টিম টিম।`},
-  {title:'খোকন খোকন ডাক পাড়ি', text:`খোকন খোকন ডাক পাড়ি\nঘুমিয়ে আছে বাড়ি বাড়ি,\nখোকন যদি জেগে ওঠে\nহাসি খুশি ছড়ায় ঘরে।`}
-];
-
 const bodyParts=[
-  {id:'head',name:'Head',bn:'মাথা',fact:'Your head holds your brain.', x:170,y:72},
-  {id:'eye',name:'Eyes',bn:'চোখ',fact:'Your eyes help you see.', x:170,y:92},
-  {id:'ear',name:'Ears',bn:'কান',fact:'Your ears help you hear.', x:118,y:95},
-  {id:'nose',name:'Nose',bn:'নাক',fact:'Your nose helps you smell.', x:170,y:108},
-  {id:'mouth',name:'Mouth',bn:'মুখ',fact:'Your mouth helps you talk and eat.', x:170,y:125},
-  {id:'heart',name:'Heart',bn:'হৃদয়',fact:'Your heart pumps blood.', x:152,y:212},
-  {id:'lungs',name:'Lungs',bn:'ফুসফুস',fact:'Your lungs help you breathe.', x:185,y:212},
-  {id:'stomach',name:'Stomach',bn:'পেট',fact:'Your stomach helps digest food.', x:170,y:270},
-  {id:'arm',name:'Arms',bn:'হাত',fact:'You use your arms to lift and hug.', x:80,y:210},
-  {id:'hand',name:'Hands',bn:'হাতের তালু',fact:'Hands help you hold and draw.', x:52,y:310},
-  {id:'leg',name:'Legs',bn:'পা',fact:'Legs help you stand and walk.', x:140,y:410},
-  {id:'foot',name:'Feet',bn:'পায়ের পাতা',fact:'Feet help you balance and walk.', x:136,y:545},
-  {id:'bones',name:'Bones / Skeleton',bn:'হাড় / কঙ্কাল',fact:'Bones hold your body up and protect organs.', x:270,y:120}
+  {id:'head',name:'Head',fact:'Your head holds your brain.', x:170,y:72},
+  {id:'eye',name:'Eyes',fact:'Your eyes help you see.', x:170,y:92},
+  {id:'ear',name:'Ears',fact:'Your ears help you hear.', x:118,y:95},
+  {id:'nose',name:'Nose',fact:'Your nose helps you smell.', x:170,y:108},
+  {id:'mouth',name:'Mouth',fact:'Your mouth helps you talk and eat.', x:170,y:125},
+  {id:'heart',name:'Heart',fact:'Your heart pumps blood.', x:152,y:212},
+  {id:'lungs',name:'Lungs',fact:'Your lungs help you breathe.', x:185,y:212},
+  {id:'stomach',name:'Stomach',fact:'Your stomach helps digest food.', x:170,y:270},
+  {id:'arm',name:'Arms',fact:'You use your arms to lift and hug.', x:80,y:210},
+  {id:'hand',name:'Hands',fact:'Hands help you hold and draw.', x:52,y:310},
+  {id:'leg',name:'Legs',fact:'Legs help you stand and walk.', x:140,y:410},
+  {id:'foot',name:'Feet',fact:'Feet help you balance and walk.', x:136,y:545},
+  {id:'bones',name:'Bones / Skeleton',fact:'Bones hold your body up and protect organs.', x:270,y:120}
 ];
 let activeBodyPart='head';
 
@@ -383,12 +334,12 @@ function goHome(){
     ['📖 Read a story','Open reading and listen to one short story','openSubject(\'reading\')'],
     ['🧮 Math game','Practice 5 quick addition questions','openSubject(\'math\')'],
     ['🌍 Explore a map','Try USA or Bangladesh map','openSubject(\'geo\')'],
-    ['🎵 Sing a rhyme','Choose English or Bangla rhymes','openSubject(\'rhymes\')']
+    ['🎵 Sing a rhyme','Choose English nursery rhymes','openSubject(\'rhymes\')']
   ].map(x=>`<div class="lesson-card"><strong>${x[0]}</strong><p class="muted">${x[1]}</p><button class="btn small primary" onclick="${x[2]}">Start</button></div>`).join('');
   app.innerHTML=`
     <section class="hero">
       <h1>Welcome back, Ruhaimah!</h1>
-      <p>A magical learning world with reading, math, maps, science, Bangla, rhymes, art and more. Big buttons, friendly voice, and fun little quizzes.</p>
+      <p>A magical learning world with reading, math, maps, science, rhymes, art and more. Big buttons, friendly voice, and fun little quizzes.</p>
       <div class="hero-buttons">
         <button class="btn primary" onclick="resumeNow()">▶️ Continue learning</button>
         <button class="btn secondary" onclick="showDailyPath()">🗓️ Daily path</button>
@@ -421,7 +372,7 @@ function showDailyPath(){
   <section class="panel"><h1>🗓️ Daily Learning Path</h1><p class="muted">About 25 to 30 minutes.</p>
     <div class="grid lesson-grid">
       <div class="lesson-card"><strong>1. Reading</strong><p>Read a short story and answer a question.</p><button class="btn small primary" onclick="openSubject('reading')">Start</button></div>
-      <div class="lesson-card"><strong>2. Phonics or Bangla</strong><p>Practice sounds, letters or simple words.</p><button class="btn small primary" onclick="openSubject('bangla')">Start</button></div>
+      <div class="lesson-card"><strong>2. Phonics</strong><p>Practice sounds, letters or simple words.</p><button class="btn small primary" onclick="startLearn('reading')">Start</button></div>
       <div class="lesson-card"><strong>3. Math</strong><p>Do 5 addition questions.</p><button class="btn small primary" onclick="startQuiz('math', true)">Start</button></div>
       <div class="lesson-card"><strong>4. Discover</strong><p>Explore planets, body parts or maps.</p><button class="btn small primary" onclick="openSubject('science')">Start</button></div>
       <div class="lesson-card"><strong>5. Fun finish</strong><p>Choose rhymes, art or chess.</p><button class="btn small primary" onclick="openSubject('rhymes')">Start</button></div>
@@ -464,13 +415,12 @@ function startLearn(key){
   if(key==='science') return renderScienceLearn();
   if(key==='body') return renderBodyLearn();
   if(key==='rhymes') return renderRhymes();
-  if(key==='bangla') return renderBanglaLearn();
   if(key==='art') return renderArt();
   if(key==='chess') return renderChess();
   const list=lessons[key]||[];
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('${key}')">← ${esc(subjects.find(s=>s.key===key).title)}</button></div>
   <section class="panel"><div class="section-title"><h1>📘 Learn: ${esc(subjects.find(s=>s.key===key).title)}</h1><button class="btn small" onclick="speak('Welcome to ${subjects.find(s=>s.key===key).title}. Let us learn together!')">🔊 Listen</button></div>
-    <div class="grid lesson-grid">${list.map((x,i)=>`<div class="lesson-card"><h3>${esc(x.title)}</h3><div style="white-space:pre-wrap">${esc(x.text)}</div><div class="row-buttons"><button class="btn small secondary" onclick="${key==='bangla' ? `speakBangla(${esc(JSON.stringify(x.listen))})` : `speak(${esc(JSON.stringify(x.listen))})`} ">🔊 Read aloud</button>${key==='english'&&x.title==='Writing prompt'?'<button class="btn small" onclick="openWriting()">✍️ Open writing box</button>':''}</div></div>`).join('')}</div>
+    <div class="grid lesson-grid">${list.map((x,i)=>`<div class="lesson-card"><h3>${esc(x.title)}</h3><div style="white-space:pre-wrap">${esc(x.text)}</div><div class="row-buttons"><button class="btn small secondary" onclick="speak(${esc(JSON.stringify(x.listen))}) ">🔊 Read aloud</button>${key==='english'&&x.title==='Writing prompt'?'<button class="btn small" onclick="openWriting()">✍️ Open writing box</button>':''}</div></div>`).join('')}</div>
   </section>`;
 }
 
@@ -480,7 +430,7 @@ function startQuiz(key, quick=false){
   if(key==='science') return renderScienceQuiz();
   if(key==='body') return renderBodyQuiz();
   if(key==='rhymes') return renderRhymesQuiz();
-  currentQuiz={subject:key,index:0,right:0,items:(quizzes[key]||[]).slice(0, quick?2:99)};
+  let items=quizzes[key]||[];if(key==='math'){items=Array.from({length:5},()=>{let a=Math.floor(Math.random()*10),b=Math.floor(Math.random()*10),sum=a+b;let choices=[sum,sum+1,sum>0?sum-1:sum+2].sort(()=>Math.random()-.5).map(String);return {q:`${a} + ${b} = ?`,choices,a:String(sum),explain:`${a} plus ${b} equals ${sum}.`}})}if(key==='chess')items=[{q:'Which piece moves in an L shape?',choices:['Knight','King','Rook'],a:'Knight',explain:'The knight moves in an L shape.'},{q:'Which piece moves diagonally?',choices:['Bishop','Pawn','Rook'],a:'Bishop',explain:'The bishop moves diagonally.'}];if(key==='art')items=[{q:'Which is a color?',choices:['Blue','Circle','Square'],a:'Blue',explain:'Blue is a color.'},{q:'How many sides does a triangle have?',choices:['Three','Four','Five'],a:'Three',explain:'A triangle has three sides.'}];currentQuiz={subject:key,index:0,right:0,items:items.slice(0,5)};
   renderQuizCard();
 }
 function renderQuizCard(){
@@ -488,11 +438,11 @@ function renderQuizCard(){
   if(!q){ return quizDone(); }
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('${currentQuiz.subject}')">← ${esc(subjects.find(s=>s.key===currentQuiz.subject).title)}</button></div>
   <section class="panel">
-    <div class="section-title"><h1>📝 Quiz: ${esc(subjects.find(s=>s.key===currentQuiz.subject).title)}</h1><button class="btn small" onclick="${/[\u0980-\u09ff]/.test(q.q)?'speakBangla':'speak'}(${esc(JSON.stringify(q.q))})">🔊 Read question</button></div>
+    <div class="section-title"><h1>📝 Quiz: ${esc(subjects.find(s=>s.key===currentQuiz.subject).title)}</h1><button class="btn small" onclick="speak(${esc(JSON.stringify(q.q))})">🔊 Read question</button></div>
     <div class="progress"><i style="width:${Math.round((currentQuiz.index/currentQuiz.items.length)*100)}%"></i></div>
     <h2>${esc(q.q)}</h2>
     <div class="choice-grid">${q.choices.map(c=>`<button class="choice" onclick="answerQuiz(${JSON.stringify(c).replace(/"/g,'&quot;')})">${esc(c)}</button>`).join('')}</div>
-    <div class="feedback" id="feedback"></div>
+    <div class="feedback" id="feedback" aria-live="polite"></div><button id="nextQuestion" class="btn primary" hidden onclick="stopSpeaking();currentQuiz.index++;renderQuizCard()">Next question →</button>
   </section>`;
 }
 function answerQuiz(ans){
@@ -500,8 +450,8 @@ function answerQuiz(ans){
   const buttons=[...document.querySelectorAll('.choice')];
   buttons.forEach(b=>{b.disabled=true; if(b.textContent===q.a)b.classList.add('good'); if(b.textContent===ans && ans!==q.a)b.classList.add('bad');});
   const ok=ans===q.a; if(ok) currentQuiz.right++; recordResult(currentQuiz.subject, ok); document.getElementById('feedback').textContent=(ok?'Great job! ':'Not quite. ')+(q.explain||q.ex||'');
-  const read=(ok?'Wonderful! ':'Let us learn. ')+(q.explain||q.ex||''); if(currentQuiz.subject==='bangla') speakBangla(ok?'বাহ! তুমি খুব ভালো করেছ।':'আবার চেষ্টা করো।'); else speak(read);
-  setTimeout(()=>{ currentQuiz.index++; renderQuizCard(); }, 1400);
+  const read=(ok?'Wonderful! ':'Let us learn. ')+(q.explain||q.ex||''); speak(read);
+  document.getElementById('nextQuestion').hidden=false;
 }
 function quizDone(){
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('${currentQuiz.subject}')">← Back</button></div>
@@ -593,8 +543,8 @@ function renderBodyLearn(){
     <div class="body-wrap">
       <div class="svg-box">${bodySVG(activeBodyPart)}<div class="skeleton-tip">🦴 Tap <strong>Bones / Skeleton</strong> to see a kid-friendly simple skeleton.</div></div>
       <div>
-        <div class="fact"><h3>${p.name} · ${p.bn}</h3><p>${p.fact}</p><div class="row-buttons"><button class="btn small secondary" onclick="speak('${p.name}. ${p.fact}')">🔊 English</button><button class="btn small secondary" onclick="speakBangla('${p.bn}')">🔊 বাংলা</button></div></div>
-        <div class="label-list">${bodyParts.map(x=>`<button class="body-btn ${x.id===activeBodyPart?'active':''}" onclick="activeBodyPart='${x.id}';renderBodyLearn()">${x.name}<br><span class="tiny">${x.bn}</span></button>`).join('')}</div>
+        <div class="fact"><h3>${p.name}</h3><p>${p.fact}</p><div class="row-buttons"><button class="btn small secondary" onclick="speak('${p.name}. ${p.fact}')">🔊 English</button></div></div>
+        <div class="label-list">${bodyParts.map(x=>`<button class="body-btn ${x.id===activeBodyPart?'active':''}" onclick="activeBodyPart='${x.id}';renderBodyLearn()">${x.name}</button>`).join('')}</div>
       </div>
     </div>
   </section>`;
@@ -609,7 +559,7 @@ function renderBodyQuiz(){
     <p>Tap the correct body part: <strong>${target.name}</strong></p>
     <div class="body-wrap">
       <div class="svg-box">${bodySVG(target.id)}</div>
-      <div class="label-list">${ask.sort(()=>Math.random()-.5).slice(0,8).concat([target]).slice(0,8).map((x,i,a)=>x).filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i).map(x=>`<button class="body-btn" onclick="bodyQuizAnswer('${x.id}','${target.id}')">${x.name}</button>`).join('')}</div>
+      <div class="label-list">${[target,...ask.filter(x=>x.id!==target.id).sort(()=>Math.random()-.5).slice(0,7)].sort(()=>Math.random()-.5).map((x,i,a)=>x).filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i).map(x=>`<button class="body-btn" onclick="bodyQuizAnswer('${x.id}','${target.id}')">${x.name}</button>`).join('')}</div>
     </div>
   </section>`;
 }
@@ -618,45 +568,18 @@ function bodyQuizAnswer(ans,target){ const ok=ans===target; recordResult('body',
 function renderRhymes(){
   setResume({page:'lesson',subject:'rhymes'});
   app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('rhymes')">← Rhymes</button></div>
-  <section class="panel"><div class="section-title"><h1>🎵 Learn: Rhymes</h1><span class="pill">English + Bangla</span></div>
-    <div class="tabs"><button class="tab active" onclick="renderRhymes()">English rhymes</button><button class="tab" onclick="renderBanglaRhymes()">বাংলা ছড়া</button></div>
+  <section class="panel"><div class="section-title"><h1>🎵 Learn: Rhymes</h1><span class="pill">English nursery rhymes</span></div>
+    
     <div class="grid lesson-grid">${EN_RHYMES.map(r=>`<div class="rhyme-card"><h3>${esc(r.title)}</h3><pre>${esc(r.text)}</pre><div class="row-buttons"><button class="btn small secondary" onclick="speak(${esc(JSON.stringify(r.text))})">🔊 Read slowly</button></div></div>`).join('')}</div>
-  </section>`;
-}
-function renderBanglaRhymes(){
-  setResume({page:'lesson',subject:'rhymes'});
-  app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('rhymes')">← Rhymes</button></div>
-  <section class="panel"><div class="section-title"><h1>🎵 বাংলা ছড়া</h1><button class="btn small" onclick="speakBangla('চলো, বাংলা ছড়া শিখি!')">🔊 Listen</button></div>
-    <div class="tabs"><button class="tab" onclick="renderRhymes()">English rhymes</button><button class="tab active" onclick="renderBanglaRhymes()">বাংলা ছড়া</button></div>
-    <div class="grid lesson-grid">${BN_RHYMES.map(r=>`<div class="rhyme-card"><h3>${esc(r.title)}</h3><pre>${esc(r.text)}</pre><div class="row-buttons"><button class="btn small secondary" onclick="speakBangla(${esc(JSON.stringify(r.text))})">🔊 আস্তে পড়ো</button></div></div>`).join('')}</div>
   </section>`;
 }
 function renderRhymesQuiz(){
   setResume({page:'quiz',subject:'rhymes'});
   currentQuiz={subject:'rhymes',index:0,right:0,items:[
-    {q:'Which rhyme mentions a star?',choices:['Twinkle, Twinkle, Little Star','Rain, Rain, Go Away','Hattima Tim Tim'],a:'Twinkle, Twinkle, Little Star',ex:'That rhyme talks about a little star.'},
-    {q:'Which Bangla rhyme starts with “হাট্টিমা টিম টিম”?',choices:['আয় আয় চাঁদ মামা','হাট্টিমা টিম টিম','Twinkle, Twinkle, Little Star'],a:'হাট্টিমা টিম টিম',ex:'Correct! That is the rhyme name.'}
+    {q:'Which rhyme mentions a star?',choices:['Twinkle, Twinkle, Little Star','Rain, Rain, Go Away','One, Two, Buckle My Shoe'],a:'Twinkle, Twinkle, Little Star',ex:'That rhyme talks about a little star.'},
+    {q:'Which rhyme talks about rain?',choices:['Rain, Rain, Go Away','Twinkle, Twinkle, Little Star','One, Two, Buckle My Shoe'],a:'Rain, Rain, Go Away',ex:'Rain, Rain, Go Away is about rain.'}
   ]};
   renderQuizCard();
-}
-
-function renderBanglaLearn(){
-  setResume({page:'lesson',subject:'bangla'});
-  const vowels=['অ','আ','ই','ঈ','উ','ঊ','ঋ','এ','ঐ','ও','ঔ'];
-  const words=[['আম','Mango'],['ফুল','Flower'],['মাছ','Fish'],['বই','Book'],['চাঁদ','Moon'],['পাখি','Bird']];
-  app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="openSubject('bangla')">← Bangla</button></div>
-  <section class="panel">
-    <div class="section-title"><h1>🇧🇩 Learn: Bangla</h1><button class="btn small" onclick="speakBangla('চলো, বাংলা শিখি!')">🔊 শুনি</button></div>
-    <p class="muted">Tap a letter or word to listen. Prerecorded Bangla audio is preferred when available.</p>
-    <h3>স্বরবর্ণ</h3>
-    <div class="alphabet-grid">${vowels.map(v=>`<button onclick="speakBangla('${v}')">${v}</button>`).join('')}</div>
-    <h3 style="margin-top:18px">শব্দ</h3>
-    <div class="grid lesson-grid">${words.map(w=>`<div class="lesson-card"><h3 style="font-size:30px">${w[0]}</h3><p>${w[1]}</p><button class="btn small secondary" onclick="speakBangla('${w[0]}')">🔊 বাংলা</button></div>`).join('')}</div>
-    <h3 style="margin-top:18px">সহজ বাক্য</h3>
-    <div class="rhyme-card"><pre>আমি স্কুলে যাই।
-আমি বই পড়ি।
-আমি বাংলা শিখি।</pre><div class="row-buttons"><button class="btn small secondary" onclick="speakBangla('আমি স্কুলে যাই। আমি বই পড়ি। আমি বাংলা শিখি।')">🔊 আস্তে পড়ে শোনাও</button><button class="btn small" onclick="renderBanglaRhymes()">🎵 বাংলা ছড়া</button></div></div>
-  </section>`;
 }
 
 function renderArt(){
@@ -711,7 +634,7 @@ async function drawMapScreen(){
   const sel = items.find(x=>x.key===mapState.selected) || items[0];
   const tar = items.find(x=>x.key===mapState.target);
   const area=document.getElementById('mapArea'); if(!area) return;
-  area.innerHTML=`<div class="toolbar"><button class="btn small ${!mapState.game?'primary':''}" onclick="loadMapMode('${mapState.mode}',false)">🔍 Explore</button><button class="btn small ${mapState.game?'primary gold':''}" onclick="loadMapMode('${mapState.mode}',true)">🎯 Find on map</button><button class="btn small" onclick="mapState.showLabels=!mapState.showLabels; drawMapScreen()">${mapState.showLabels?'Hide':'Show'} labels</button><button class="btn small" onclick="${mapState.game?`speak('Find ${tar?tar.name:''}')`:`speak('${sel.name}. ${sel.fact}')`}">🔊 Hear</button></div>
+  area.innerHTML=`<div class="toolbar"><button class="btn small ${!mapState.game?'primary':''}" onclick="loadMapMode('${mapState.mode}',false)">🔍 Explore</button><button class="btn small ${mapState.game?'primary gold':''}" onclick="loadMapMode('${mapState.mode}',true)">🎯 Find on map</button><button class="btn small" onclick="mapState.showLabels=!mapState.showLabels; drawMapScreen()">${mapState.showLabels?'Hide':'Show'} labels</button><button class="btn small" onclick="speak(${esc(JSON.stringify(mapState.game?'Find '+(tar?tar.name:''):sel.name+'. '+sel.fact))})">🔊 Hear</button></div>
   <div class="fact"><h3>${mapState.game ? (tar ? 'Find: '+tar.name : '🎉 Great job!') : sel.name}</h3><p>${mapState.game ? (tar ? 'Tap the correct area on the map.' : 'You found them all!') : sel.fact}</p></div>
   <div class="map-card" id="mapCanvas">Loading map…</div><div class="legend" id="mapLegend"></div>`;
   try{ const data=await loadGeoJSON(mapState.mode); renderGeoSVG(data, items); } catch(e){ document.getElementById('mapCanvas').innerHTML='<p>Map could not load right now.</p>'; if(mapState.mode==='usStates') renderUSTileFallback(); else renderBDFallback(); }
@@ -766,7 +689,7 @@ function renderGeoSVG(data, items){
 }
 function mapTap(key){
   const items=geoItems(mapState.mode); const item=items.find(x=>x.key===key); if(!item) return;
-  if(!mapState.game){ mapState.selected=key; drawMapScreen(); speak(item.name+'. '+item.fact, mapState.mode.startsWith('bd')?'en-US':'en-US'); return; }
+  if(!mapState.game){ mapState.selected=key; drawMapScreen(); speak(item.name+'. '+item.fact, 'en-US'); return; }
   const ok = key===mapState.target; recordResult('geo', ok); mapState.wrong = ok?null:key; if(ok){ mapState.done.push(key); chooseNewTarget(); speak('Great job!'); if(!mapState.target) speak('Wonderful! You found them all!'); } else { speak('Try again!'); }
   drawMapScreen();
 }
@@ -785,20 +708,11 @@ function exportProgress(){ const blob=new Blob([JSON.stringify(saved,null,2)],{t
 function importProgressPrompt(){ const input=document.createElement('input'); input.type='file'; input.accept='application/json'; input.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ saved=Object.assign({}, defaultSave, JSON.parse(r.result)); saveAll(); toast('Progress imported'); openDashboard(); }catch(err){ alert('Could not import file'); } }; r.readAsText(f); }; input.click(); }
 function resetProgress(){ if(confirm('Reset all saved progress on this browser?')){ saved=JSON.parse(JSON.stringify(defaultSave)); saveAll(); goHome(); } }
 
-function renderSettings(){
-  app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="goHome()">← Home</button></div>
-  <section class="panel"><div class="section-title"><h1>⚙️ Voice & Experience Settings</h1><button class="btn small" onclick="speak('Hello, Ruhaimah! Welcome back to your learning world!')">🔊 Test voice</button></div>
-    <div class="settings-grid">
-      <div class="lesson-card"><h3>Audio</h3><label><input type="checkbox" id="audioOn" ${voicePrefs.audio?'checked':''}> Turn audio on</label><p class="tiny">If this is off, the page stays silent.</p></div>
-      <div class="lesson-card"><h3>Voice speed</h3><select id="speed" class="inline-select"><option value="0.58" ${voicePrefs.speed==0.58?'selected':''}>Extra slow</option><option value="0.7" ${voicePrefs.speed==0.7?'selected':''}>Slow & friendly</option><option value="0.82" ${voicePrefs.speed==0.82?'selected':''}>Regular</option></select></div>
-      <div class="lesson-card"><h3>Voice style</h3><select id="pitch" class="inline-select"><option value="1.08" ${voicePrefs.pitch==1.08?'selected':''}>Gentle</option><option value="1.12" ${voicePrefs.pitch==1.12?'selected':''}>Cheerful</option><option value="1.18" ${voicePrefs.pitch==1.18?'selected':''}>More enthusiastic</option></select><p class="tiny">We now prefer female-sounding voices when the device provides them.</p></div>
-      <div class="lesson-card"><h3>Smoother experience</h3><ul><li>Big buttons</li><li>Continue button</li><li>Learn and Quiz separated</li><li>Less clutter</li></ul></div>
-    </div>
-    <div class="row-buttons"><button class="btn primary" onclick="saveSettings()">Save settings</button><button class="btn secondary" onclick="speakBangla('হ্যালো রুহাইমাহ, চলো শিখি!')">🔊 Test Bangla</button></div>
-    <p class="tiny">Important: I can strongly prefer a female Bangla voice, but a true native female Bangla voice depends on what Bengali voices are installed on the device/browser. Without a cloud TTS service, that part cannot be fully guaranteed.</p>
-  </section>`;
-}
-function saveSettings(){ voicePrefs.audio=document.getElementById('audioOn').checked; voicePrefs.speed=Number(document.getElementById('speed').value); voicePrefs.pitch=Number(document.getElementById('pitch').value); saveAll(); toast('Settings saved'); speak('Wonderful! Your voice settings are saved.'); }
+function renderSettings(){stopSpeaking();app.innerHTML=`<div class="crumbs"><button class="btn small" onclick="goHome()">← Home</button></div><section class="panel"><h1>🎙️ English voice settings</h1><p>Choose a voice that sounds clear and friendly on this device.</p><div class="settings-grid"><div class="lesson-card"><h3>Sound</h3><label><input type="checkbox" id="audioOn" ${voicePrefs.audio?'checked':''}> Audio on</label></div><div class="lesson-card"><h3>English voice</h3><select id="voiceChoice" class="inline-select" style="max-width:100%"></select></div><div class="lesson-card"><h3>Speed</h3><select id="speed" class="inline-select">${[[.65,'Extra slow'],[.8,'Slow and clear'],[.95,'Regular']].map(([v,t])=>`<option value="${v}" ${voicePrefs.speed===v?'selected':''}>${t}</option>`).join('')}</select></div><div class="lesson-card"><h3>Tone</h3><select id="pitch" class="inline-select">${[[1,'Natural'],[1.06,'Cheerful'],[1.12,'Bright']].map(([v,t])=>`<option value="${v}" ${voicePrefs.pitch===v?'selected':''}>${t}</option>`).join('')}</select></div></div><div class="row-buttons"><button class="btn primary" onclick="saveSettings();speak('Hello! Welcome to your learning world. Let us have fun learning together!')">🔊 Save and test voice</button><button class="btn" onclick="stopSpeaking()">Stop</button></div><p class="tiny">Voice quality depends on the English voices available in your browser and device. Try another voice if the first one sounds robotic.</p></section>`;refreshVoices()}
+function saveSettings(){voicePrefs.audio=document.getElementById('audioOn').checked;voicePrefs.speed=Number(document.getElementById('speed').value);voicePrefs.pitch=Number(document.getElementById('pitch').value);voicePrefs.voiceURI=document.getElementById('voiceChoice').value;saveAll();toast('Settings saved')}
+// Reset voice defaults once for this English edition.
+try{if(!localStorage.getItem('english-voice-v4')){voicePrefs={audio:true,speed:.8,pitch:1.06,voiceURI:''};localStorage.setItem('english-voice-v4','1')}}catch(e){}
+if(saved.resume&&saved.resume.subject==='bangla')saved.resume=null;
 
 saveAll();
 if('speechSynthesis' in window){ try{ speechSynthesis.getVoices(); }catch(e){} }
