@@ -249,7 +249,7 @@ function setResume(page){ stopSpeaking(); saved.resume = page; saveAll(); }
 /* ---------- subjects ---------- */
 const subjects = [
   {key:'reading', emoji:'📚', title:'Reading & phonics', desc:'Stories, letter sounds, blending and sight words', color:'#ffe3ee'},
-  {key:'math', emoji:'🧮', title:'Math', desc:'Counting, adding and taking away', color:'#dcf6e5'},
+  {key:'math', emoji:'🧮', title:'Math', desc:'Counting, adding, shapes, patterns & puzzles', color:'#dcf6e5'},
   {key:'english', emoji:'✏️', title:'English & writing', desc:'Sentences, opposites and spelling', color:'#fff0cf'},
   {key:'science', emoji:'🔬', title:'Science', desc:'Planets, animals and plants', color:'#dcf0ff'},
   {key:'body', emoji:'🧍', title:'Human body', desc:'Body parts, senses and bones', color:'#e6f4ff'},
@@ -745,15 +745,6 @@ function numChoices(ans){
   for (const d of shuffle([1, -1, 2, -2, 3])){ if (set.size >= 3) break; if (ans + d >= 0) set.add(ans + d); }
   return shuffle([...set]).map(String);
 }
-function mathItem(){
-  const E = pick(['🍎','⭐','🐟','🧁','🌸','🐞','🎈']);
-  const type = pick(['add','add','sub','count','compare','next']);
-  if (type === 'add'){ const a = rand(1, 6), b = rand(1, 4); return {q:`${a} + ${b} = ?`, visual:`${E.repeat(a)} ➕ ${E.repeat(b)}`, choices:numChoices(a + b), a:String(a + b), explain:`${a} plus ${b} equals ${a + b}.`}; }
-  if (type === 'sub'){ const a = rand(3, 9), b = rand(1, a - 1); return {q:`${a} − ${b} = ?`, visual:`${E.repeat(a)}`, say:`${a} take away ${b}. How many are left?`, choices:numChoices(a - b), a:String(a - b), explain:`${a} take away ${b} leaves ${a - b}.`}; }
-  if (type === 'count'){ const n = rand(3, 12); return {q:'How many can you count?', visual:E.repeat(n), choices:numChoices(n), a:String(n), explain:`There are ${n}.`}; }
-  if (type === 'compare'){ const a = rand(1, 20); let b = rand(1, 20); while (b === a) b = rand(1, 20); return {q:'Which number is bigger?', choices:[String(a), String(b)], a:String(Math.max(a, b)), explain:`${Math.max(a, b)} is bigger than ${Math.min(a, b)}.`}; }
-  const n = rand(1, 18); return {q:`What number comes after ${n}?`, choices:numChoices(n + 1), a:String(n + 1), explain:`After ${n} comes ${n + 1}.`};
-}
 function makeQuiz(key){
   if (key === 'math') return Array.from({length:5}, mathItem);
   if (key === 'reading'){
@@ -943,21 +934,6 @@ function storyQuiz(i){
 
 /* ---------- math ---------- */
 let tenCount = 0;
-function renderMathLearn(){
-  setResume({page:'lesson', subject:'math'});
-  show(`${crumbs('Math', "openSubject('math')")}
-  <section class="panel"><div class="section-title"><h1>🧮 Learn: Math</h1>${speakBtn('Let’s learn math! Tap the boxes to count.')}</div>
-    <div class="body-wrap">
-      <div><h2>🔟 Ten frame</h2><p>Tap a box to add a ladybug. Tap again to take it away.</p>
-        <div class="ten-frame" id="tenFrame">${Array.from({length:10}, (_, i) => `<button aria-label="Box ${i + 1}" onclick="tenTap(${i})"></button>`).join('')}</div>
-        <div class="row-buttons"><button class="btn small" onclick="tenSet(0)">Clear</button><button class="btn small" onclick="tenSet(${rand(1, 9)})">Surprise me</button></div></div>
-      <div class="fact" style="text-align:center"><div class="big-number" id="tenNum">0</div><p id="tenWords" style="font-size:22px;font-weight:800"></p></div>
-    </div>
-  </section>
-  <section class="panel"><h2>📖 Math ideas</h2>${lessonCards(lessons.math)}
-    <div class="row-buttons"><button class="btn gold" onclick="startQuiz('math')">📝 Math quiz</button></div></section>`);
-  tenSet(0, true);
-}
 const NUMW = ['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
 function tenTap(i){ const btns = document.querySelectorAll('#tenFrame button'); const on = btns[i].classList.contains('on'); tenSet(on ? tenCount - 1 : tenCount + 1); }
 function tenSet(n, quiet){
@@ -1939,6 +1915,327 @@ async function storyReadMine(i){
 function blendItem(){
   const list = BLEND_WORDS.filter(w => (w[2] || 1) === 1), t = pick(list), others = shuffle(list.filter(w => w !== t)).slice(0, 2);
   return {q:`Blend the sounds: ${t[0].join(' – ')}. Which picture?`, say:`Blend the sounds. ${t[0].map(soundOf).join('. ')}. Which picture is it?`, choices:shuffle([t, ...others]).map(w => `${w[1]} ${w[0].join('')}`), a:`${t[1]} ${t[0].join('')}`, explain:`${t[0].join(' - ')} makes ${t[0].join('')}.`};
+}
+
+/* ---------- Math hub: hands-on activities ---------- */
+const MATH_TABS = [['count','🔢 Counting'],['add','➕ Adding'],['sub','➖ Take away'],['skip','🦘 Skip counting'],['compare','⚖️ More or less'],['oddeven','👫 Odd & even'],['shapes','🔷 Shapes'],['patterns','🔁 Patterns'],['puzzles','🧩 Puzzles']];
+const OBJ = ['🍎','⭐','🐟','🧁','🌸','🐞','🎈','🍓','🐥','🚗','🦋','🍪'];
+const NUMW20 = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'];
+function renderMathLearn(tab){
+  tab = tab || renderMathLearn.tab || 'count'; renderMathLearn.tab = tab;
+  setResume({page:'lesson', subject:'math'});
+  show(`${crumbs('Math', "openSubject('math')")}
+  <section class="panel"><div class="section-title"><h1>🧮 Math playground</h1><button class="btn small gold" onclick="startQuiz('math')">📝 Math quiz</button></div>
+    <div class="tabs">${MATH_TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'active' : ''}" onclick="renderMathLearn('${k}')">${l}</button>`).join('')}</div>
+    <div id="mathZone"></div></section>`);
+  ({count:mCount, add:mAdd, sub:mSub, skip:mSkip, compare:mCompare, oddeven:mOddEven, shapes:mShapes, patterns:mPatterns, puzzles:mPuzzles})[tab]();
+}
+const MZ = html => { document.getElementById('mathZone').innerHTML = html; };
+const tip = (text, say) => `<div class="math-tip">${speakBtn(say || text)}<span>💡 ${text}</span></div>`;
+function mathWin(btn, z, msg){
+  recordResult('math', true, btn);
+  const c = pick(cheers), fb = z.querySelector('.m-fb'); if (fb){ fb.className = 'feedback good m-fb'; fb.textContent = '🌟 ' + c + (msg ? ' ' + msg : ''); }
+  speak(c + (msg ? ' ' + msg : ''), {quiet:true});
+  const n = z.querySelector('.m-next'); if (n){ n.classList.add('primary'); n.focus({preventScroll:true}); }
+}
+/* A multiple-choice round. gen() returns {q, say, visual, opts:[string|{label,html}], ans, explain, after(z), hideOpts} */
+function mathRound(zoneId, gen){
+  const z = document.getElementById(zoneId); if (!z) return;
+  const r = gen();
+  z.innerHTML = `<div class="question">${speakBtn(r.say || r.q)}<h2>${esc(r.q)}</h2></div><div class="m-vis">${r.visual || ''}</div><div class="m-help"></div>
+    <div class="choice-grid m-opts" ${r.hideOpts ? 'hidden' : ''}></div><p class="feedback m-fb" aria-live="polite"></p><button class="btn big m-next">Next →</button>`;
+  z.querySelector('.m-next').onclick = () => { stopSpeaking(); mathRound(zoneId, gen); };
+  let done = false;
+  r.opts.forEach(o => {
+    const label = typeof o === 'object' ? o.label : String(o);
+    const b = document.createElement('button'); b.className = 'choice' + (!/[A-Za-z0-9]/.test(label) && !(typeof o === 'object' && o.html) ? ' emoji-choice' : ''); b.innerHTML = typeof o === 'object' && o.html ? o.html : esc(label); b.setAttribute('aria-label', label);
+    b.onclick = () => {
+      if (done) return;
+      if (label === String(r.ans)){ done = true; b.classList.add('good'); mathWin(b, z, r.explain); }
+      else { b.classList.add('bad'); b.disabled = true; Sfx.bad(); const fb = z.querySelector('.m-fb'); fb.className = 'feedback bad m-fb'; fb.textContent = '💜 ' + pick(tryAgains) + ' Try again!'; speak(pick(tryAgains) + ' Try again.', {quiet:true}); }
+    };
+    z.querySelector('.m-opts').append(b);
+  });
+  if (r.after) r.after(z);
+  if (voicePrefs.autoRead && !r.noAutoRead) speak(r.say || r.q, {quiet:true});
+}
+function numOpts(ans, n = 3, min = 0){ const s = new Set([ans]); for (const d of shuffle([1, -1, 2, -2, 3, -3])){ if (s.size >= n) break; if (ans + d >= min) s.add(ans + d); } return shuffle([...s]).map(String); }
+const emo = (e, n) => Array.from({length:n}, () => `<span class="m-obj">${e}</span>`).join('');
+function numberLine(max, pos){ return `<div class="nline"><div class="nl-track">${Array.from({length:max + 1}, (_, i) => `<span class="nl-tick" style="left:${i / max * 100}%"><b>${i}</b></span>`).join('')}<span class="frog" style="left:${pos / max * 100}%">🐸</span></div></div>`; }
+
+/* ---------- Counting ---------- */
+const MC = {max:10};
+function mCount(){
+  MZ(`${tip('Touch each thing one time and say the number. The last number tells how many!')}
+    <h2>👆 Tap to count</h2><div class="seg" style="max-width:340px">${[[10,'Up to 10'],[20,'Up to 20']].map(([m, l]) => `<button class="${MC.max === m ? 'active' : ''}" onclick="MC.max=${m};mCount()">${l}</button>`).join('')}</div>
+    <div id="tapCount"></div>
+    <h2 style="margin-top:22px">🔟 Ten frame</h2><p class="muted">Tap a box to add a ladybug. Tap again to take it away.</p>
+    <div class="body-wrap"><div><div class="ten-frame" id="tenFrame">${Array.from({length:10}, (_, i) => `<button aria-label="Box ${i + 1}" onclick="tenTap(${i})"></button>`).join('')}</div>
+      <div class="row-buttons"><button class="btn small" onclick="tenSet(0)">Clear</button><button class="btn small" onclick="tenSet(${rand(1, 9)})">Surprise me</button></div></div>
+      <div class="fact" style="text-align:center"><div class="big-number" id="tenNum">0</div><p id="tenWords" style="font-size:22px;font-weight:800"></p></div></div>
+    <h2 style="margin-top:22px">🔍 Find the number</h2><div id="chartGame"></div>`);
+  tapCount(); tenSet(0, true); chartGame();
+}
+function tapCount(){
+  const z = document.getElementById('tapCount'); if (!z) return;
+  const n = rand(3, MC.max), e = pick(OBJ); let c = 0;
+  z.innerHTML = `<p style="font-size:20px">How many ${e}? Tap each one!</p><div class="count-field">${Array.from({length:n}, (_, i) => `<button class="count-obj" aria-label="item ${i + 1}">${e}</button>`).join('')}</div>
+    <p class="big-number" style="font-size:48px" id="cNum">0</p><p class="feedback m-fb"></p><button class="btn m-next" onclick="tapCount()">New set →</button>`;
+  z.querySelectorAll('.count-obj').forEach(b => b.onclick = () => {
+    if (b.classList.contains('counted')) return speak('You already counted that one!', {quiet:true});
+    c++; b.classList.add('counted'); b.insertAdjacentHTML('beforeend', `<i>${c}</i>`); z.querySelector('#cNum').textContent = c; Sfx.pop();
+    if (c === n){ speak(`${NUMW20[c] || c}! There are ${n}!`, {quiet:true}); setTimeout(() => mathWin(b, z, `There are ${n}.`), 900); }
+    else speak(NUMW20[c] || String(c), {quiet:true, gap:0});
+  });
+}
+function chartGame(){
+  const z = document.getElementById('chartGame'); if (!z) return;
+  const max = MC.max === 10 ? 30 : 100, t = rand(1, max);
+  z.innerHTML = `<div class="question"><button class="speak-btn" onclick="speak('Find ${t}')">🔊</button><h2>Find <span style="color:var(--purple)">${t}</span> on the chart!</h2></div>
+    <div class="hundred">${Array.from({length:max}, (_, i) => `<button data-n="${i + 1}">${i + 1}</button>`).join('')}</div><p class="feedback m-fb"></p>`;
+  z.querySelectorAll('.hundred button').forEach(b => b.onclick = () => {
+    const v = +b.dataset.n;
+    if (v === t){ b.classList.add('hit'); mathWin(b, z, `You found ${t}!`); setTimeout(chartGame, 1800); }
+    else { b.classList.add('miss'); setTimeout(() => b.classList.remove('miss'), 700); Sfx.bad(); speak(`That is ${v}. Find ${t}.`, {quiet:true}); }
+  });
+  speak(`Find ${t}`, {quiet:true});
+}
+
+/* ---------- Adding ---------- */
+const MA = {max:10};
+function mAdd(){
+  MZ(`${tip('Adding means putting groups together. Tap “Put together” or hop with the frog to help!', 'Adding means putting groups together.')}
+    <div class="seg" style="max-width:340px">${[[10,'Sums to 10'],[20,'Sums to 20']].map(([m, l]) => `<button class="${MA.max === m ? 'active' : ''}" onclick="MA.max=${m};mAdd()">${l}</button>`).join('')}</div><div id="mathGame"></div>`);
+  mathRound('mathGame', () => {
+    const a = rand(1, MA.max === 10 ? 6 : 12), b = rand(1, Math.min(MA.max - a, MA.max === 10 ? 5 : 9)), e = pick(OBJ), s = a + b;
+    return {q:`${a} + ${b} = ?`, visual:`<div class="m-groups"><div class="m-group">${emo(e, a)}</div><span class="m-op">➕</span><div class="m-group">${emo(e, b)}</div></div>`, opts:numOpts(s), ans:s, explain:`${a} plus ${b} is ${s}.`,
+      after: z => {
+        const h = z.querySelector('.m-help');
+        h.innerHTML = `<div class="row-buttons"><button class="btn small sky">🤝 Put together</button><button class="btn small secondary">🐸 Hop on the number line</button></div><div class="m-helper"></div>`;
+        const [tog, hop] = h.querySelectorAll('button'), area = h.querySelector('.m-helper');
+        tog.onclick = () => { z.querySelector('.m-vis').innerHTML = `<div class="m-group joined">${emo(e, s)}</div>`; const spans = [...z.querySelectorAll('.m-vis .m-obj')]; readLines(spans.map((_, i) => NUMW20[i + 1] || String(i + 1)), spans, {gap:60}); };
+        hop.onclick = () => {
+          let pos = a, hops = 0;
+          area.innerHTML = `${numberLine(MA.max, a)}<div class="row-buttons"><button class="btn primary">Hop +1</button><span class="pill" id="hopInfo">Start at ${a}. Hop ${b} times!</span></div>`;
+          speak(`Start at ${a}. Hop ${b} times.`, {quiet:true});
+          area.querySelector('.btn').onclick = ev => {
+            if (hops >= b) return;
+            hops++; pos++; const f = area.querySelector('.frog'); f.style.left = (pos / MA.max * 100) + '%'; f.classList.remove('hop'); void f.offsetWidth; f.classList.add('hop'); Sfx.pop();
+            area.querySelector('#hopInfo').textContent = hops < b ? `${hops} hop${hops > 1 ? 's' : ''}… on ${pos}` : `🎉 Landed on ${pos}!`;
+            speak(hops < b ? String(pos) : `${pos}! ${a} plus ${b} is ${pos}.`, {quiet:true, gap:0});
+            if (hops >= b) ev.target.disabled = true;
+          };
+        };
+      }};
+  });
+}
+
+/* ---------- Take away ---------- */
+function mSub(){
+  MZ(`${tip('Taking away means some go away. Tap the right number to make them fly away, then count what is left!')}<div id="mathGame"></div>`);
+  mathRound('mathGame', () => {
+    const a = rand(3, 10), b = rand(1, a - 1), e = pick(OBJ), left = a - b;
+    return {q:`${a} − ${b} = ?`, say:`${a} take away ${b}. Tap ${b} to take them away.`, hideOpts:true, noAutoRead:false,
+      visual:`<p style="font-size:20px">Tap <b>${b}</b> to take them away!</p><div class="count-field">${Array.from({length:a}, () => `<button class="count-obj">${e}</button>`).join('')}</div>`,
+      opts:numOpts(left), ans:left, explain:`${a} take away ${b} leaves ${left}.`,
+      after: z => { let taken = 0; z.querySelectorAll('.count-obj').forEach(o => o.onclick = () => {
+        if (o.classList.contains('gone') || taken >= b) return;
+        taken++; o.classList.add('gone'); Sfx.pop(); speak(`${taken}`, {quiet:true, gap:0});
+        if (taken === b){ setTimeout(() => { z.querySelector('.m-opts').hidden = false; z.querySelector('.m-vis p').innerHTML = `<b>${b}</b> flew away! How many are <b>left</b>?`; speak('How many are left?', {quiet:true}); }, 500); }
+      }); }};
+  });
+}
+
+/* ---------- Skip counting ---------- */
+const MS = {step:2};
+function mSkip(){
+  const st = MS.step, max = {2:30, 3:36, 5:60, 10:100}[st];
+  MZ(`${tip(`Skip counting by ${st}s means jumping ${st} numbers each time.`)}
+    <div class="seg" style="max-width:520px">${[2, 3, 5, 10].map(s => `<button class="${s === st ? 'active' : ''}" onclick="MS.step=${s};mSkip()">by ${s}s</button>`).join('')}</div>
+    <h2>🦘 Tap the next number</h2><div class="skip-seq" id="skipSeq">Start: </div>
+    <div class="hundred ${max > 60 ? 'h100' : ''}" id="skipChart">${Array.from({length:max}, (_, i) => `<button data-n="${i + 1}">${i + 1}</button>`).join('')}</div>
+    <div class="row-buttons"><button class="btn sky" onclick="skipSing()">🎵 Count along</button><button class="btn" onclick="mSkip()">↺ Start over</button></div><p class="feedback m-fb" id="skipFb"></p>
+    <h2 style="margin-top:22px">❓ Fill the gap</h2><div id="mathGame"></div>`);
+  let next = st; const seq = [];
+  document.querySelectorAll('#skipChart button').forEach(b => b.onclick = () => {
+    const v = +b.dataset.n; if (b.classList.contains('hit')) return;
+    if (v === next){ b.classList.add('hit'); seq.push(v); document.getElementById('skipSeq').textContent = 'Counting: ' + seq.join(', '); Sfx.pop(); speak(String(v), {quiet:true, gap:0}); next += st;
+      if (next > max){ const z = document.querySelector('#mathZone'); recordResult('math', true, b); confetti(); document.getElementById('skipFb').className = 'feedback good'; document.getElementById('skipFb').textContent = `🌟 You counted by ${st}s all the way to ${v}!`; setTimeout(() => speak(`Amazing! You counted by ${st}s to ${v}!`, {quiet:true}), 600); } }
+    else { b.classList.add('miss'); setTimeout(() => b.classList.remove('miss'), 600); Sfx.bad(); speak(`Not ${v}. Jump ${st} from ${next - st}.`, {quiet:true}); }
+  });
+  speak(`Count by ${st}s. Tap ${st} first!`, {quiet:true});
+  mathRound('mathGame', () => {
+    const s = pick([2, 3, 5, 10]), start = s * rand(0, 4) + s, arr = Array.from({length:5}, (_, i) => start + s * i), gap = rand(1, 3);
+    return {q:arr.map((x, i) => i === gap ? '__' : x).join(', '), say:`Count by ${s}s. ${arr.map((x, i) => i === gap ? 'what' : x).join(', ')}. What number is missing?`, opts:shuffle([arr[gap], arr[gap] + 1, arr[gap] - 1].map(String)), ans:arr[gap], explain:`Counting by ${s}s: ${arr.join(', ')}.`, noAutoRead:true};
+  });
+}
+function skipSing(){ const st = MS.step, max = {2:30, 3:36, 5:60, 10:100}[st], nums = []; for (let v = st; v <= max; v += st) nums.push(v);
+  const btns = nums.map(n => document.querySelector(`#skipChart button[data-n="${n}"]`));
+  speak(nums.map(String), {gap:150, onPart: i => { btns.forEach(b => b.classList.remove('sing')); if (i >= 0) btns[i].classList.add('sing'); }}); }
+
+/* ---------- More or less ---------- */
+function mCompare(){
+  MZ(`${tip('More means a bigger amount. Less means a smaller amount. The hungry alligator always eats the bigger number! 🐊')}
+    <h2>👀 Which group?</h2><div id="mathGame"></div><h2 style="margin-top:22px">🐊 Alligator numbers</h2><div id="mathGame2"></div>`);
+  mathRound('mathGame', () => {
+    const e = pick(OBJ); let a = rand(1, 10), b = rand(1, 10); if (Math.random() < .12) b = a;
+    const word = pick(['more', 'less']), ans = a === b ? 'same' : (word === 'more' ? (a > b ? 'left' : 'right') : (a < b ? 'left' : 'right'));
+    return {q:`Which group has ${word.toUpperCase()}?`, say:`Which group has ${word}?`, opts:[{label:'left', html:`<div class="m-group">${emo(e, a)}</div>`}, {label:'right', html:`<div class="m-group">${emo(e, b)}</div>`}, {label:'same', html:'🟰 They are the same'}], ans,
+      explain:a === b ? `Both have ${a}.` : `${Math.max(a, b)} is more than ${Math.min(a, b)}.`};
+  });
+  mathRound('mathGame2', () => {
+    if (Math.random() < .35){ const n = rand(1, 19), more = Math.random() < .5, ans = more ? n + 1 : n - 1; return {q:`What is 1 ${more ? 'more' : 'less'} than ${n}?`, opts:numOpts(ans), ans, explain:`1 ${more ? 'more' : 'less'} than ${n} is ${ans}.`, noAutoRead:true}; }
+    const a = rand(0, 20); let b = rand(0, 20); if (Math.random() < .15) b = a;
+    const ans = a > b ? '>' : a < b ? '<' : '=';
+    return {q:`${a}  ?  ${b}`, say:`Is ${a} more than, less than, or equal to ${b}?`, visual:`<div class="gator-row"><span>${a}</span><span class="gator-q">❓</span><span>${b}</span></div>`,
+      opts:[{label:'>', html:'<b class="sym">&gt;</b> more than'}, {label:'<', html:'<b class="sym">&lt;</b> less than'}, {label:'=', html:'<b class="sym">=</b> equal'}], ans, noAutoRead:true,
+      explain:ans === '=' ? `${a} equals ${b}.` : `${a} is ${ans === '>' ? 'more' : 'less'} than ${b}. The alligator eats ${Math.max(a, b)}!`};
+  });
+}
+
+/* ---------- Odd & even ---------- */
+function mOddEven(){
+  MZ(`${tip('Even numbers can make pairs with nobody left over. Odd numbers always have one left over!')}
+    <h2>🧦 Pair the socks</h2><div id="pairGame"></div><h2 style="margin-top:22px">🔢 Odd or even?</h2><div id="mathGame"></div>`);
+  pairGame();
+  mathRound('mathGame', () => { const n = rand(1, 30), ans = n % 2 ? 'Odd' : 'Even'; return {q:`Is ${n} odd or even?`, opts:['Odd', 'Even'], ans, explain:`${n} is ${ans.toLowerCase()}. ${ans === 'Even' ? 'Even numbers end in 0, 2, 4, 6 or 8.' : 'Odd numbers end in 1, 3, 5, 7 or 9.'}`, noAutoRead:true}; });
+}
+const PAIR_COLORS = ['#ffd6e7','#d9f0ff','#e3f8ec','#fff1c2','#ece2ff','#ffe1d3','#d6f4ec'];
+function pairGame(){
+  const z = document.getElementById('pairGame'); if (!z) return;
+  const n = rand(4, 12), e = pick(['🧦','🧤','👟','🐟','🍒','🐧']); let sel = null, pairs = 0;
+  z.innerHTML = `<p style="font-size:20px">Tap two ${e} to make a pair. Can every one find a partner?</p><div class="count-field">${Array.from({length:n}, () => `<button class="count-obj">${e}</button>`).join('')}</div>
+    <div class="choice-grid" id="oeOpts" hidden><button class="choice" data-v="Even">👫 Even, everyone has a partner</button><button class="choice" data-v="Odd">🙋 Odd, one is left over</button></div><p class="feedback m-fb"></p><button class="btn m-next" onclick="pairGame()">New socks →</button>`;
+  speak(`Tap two to make a pair. Can every one find a partner?`, {quiet:true});
+  const items = [...z.querySelectorAll('.count-obj')];
+  const check = () => { const free = items.filter(i => !i.dataset.p); if (free.length < 2){ z.querySelector('#oeOpts').hidden = false; speak(`${n}. Is ${n} odd or even?`, {quiet:true}); } };
+  items.forEach(it => it.onclick = () => {
+    if (it.dataset.p) return;
+    if (!sel){ sel = it; it.classList.add('picked'); Sfx.tap(); return; }
+    if (sel === it){ sel.classList.remove('picked'); sel = null; return; }
+    const c = PAIR_COLORS[pairs % PAIR_COLORS.length]; pairs++;
+    [sel, it].forEach(x => { x.dataset.p = pairs; x.classList.remove('picked'); x.classList.add('paired'); x.style.background = c; x.insertAdjacentHTML('beforeend', `<i>${pairs}</i>`); });
+    sel = null; Sfx.pop(); speak(`${pairs} pair${pairs > 1 ? 's' : ''}`, {quiet:true, gap:0}); check();
+  });
+  z.querySelectorAll('#oeOpts .choice').forEach(b => b.onclick = () => {
+    const ans = n % 2 ? 'Odd' : 'Even';
+    if (b.dataset.v === ans){ b.classList.add('good'); z.querySelectorAll('#oeOpts .choice').forEach(x => x.disabled = true); mathWin(b, z, `${n} is ${ans.toLowerCase()}! ${ans === 'Odd' ? 'One is left over.' : 'Everyone has a partner.'}`); }
+    else { b.classList.add('bad'); b.disabled = true; Sfx.bad(); speak('Look again. Is one left over?', {quiet:true}); }
+  });
+}
+
+/* ---------- Shapes ---------- */
+const polyPts = (n, r = 44, rot = -90) => Array.from({length:n}, (_, i) => { const a = (rot + i * 360 / n) * Math.PI / 180; return `${(50 + r * Math.cos(a)).toFixed(1)},${(52 + r * Math.sin(a)).toFixed(1)}`; }).join(' ');
+const SHAPES = {
+  circle:{sides:0, corners:0, ex:'⚽ a ball, 🍪 a cookie', d:'<circle cx="50" cy="50" r="42"/>'},
+  oval:{sides:0, corners:0, ex:'🥚 an egg', d:'<ellipse cx="50" cy="50" rx="45" ry="30"/>'},
+  triangle:{sides:3, corners:3, ex:'🍕 a pizza slice', d:'<polygon points="50,8 94,88 6,88"/>'},
+  square:{sides:4, corners:4, ex:'🪟 a window, 🧇 a waffle', d:'<rect x="12" y="12" width="76" height="76" rx="2"/>'},
+  rectangle:{sides:4, corners:4, ex:'🚪 a door, 📱 a phone', d:'<rect x="4" y="24" width="92" height="52" rx="2"/>'},
+  diamond:{sides:4, corners:4, ex:'🪁 a kite', d:'<polygon points="50,4 88,50 50,96 12,50"/>'},
+  pentagon:{sides:5, corners:5, ex:'🏠 the front of a house', d:`<polygon points="${polyPts(5)}"/>`},
+  hexagon:{sides:6, corners:6, ex:'🐝 a honeycomb', d:`<polygon points="${polyPts(6, 45, 0)}"/>`},
+  octagon:{sides:8, corners:8, ex:'🛑 a stop sign', d:`<polygon points="${polyPts(8, 45, -67.5)}"/>`},
+  star:{sides:10, corners:10, ex:'⭐ stars in a drawing', d:`<polygon points="${Array.from({length:10}, (_, i) => { const r = i % 2 ? 19 : 46, a = (-90 + i * 36) * Math.PI / 180; return `${(50 + r * Math.cos(a)).toFixed(1)},${(54 + r * Math.sin(a)).toFixed(1)}`; }).join(' ')}"/>`},
+  heart:{sides:null, corners:1, ex:'❤️ a valentine', d:'<path d="M50 90 C10 62 4 38 18 24 C30 12 46 18 50 32 C54 18 70 12 82 24 C96 38 90 62 50 90 Z"/>'}
+};
+const SHAPE_COLORS = ['#ff6fae','#4f9dff','#3cc48a','#ffc23d','#a77bf3','#ff8a5b','#2fc2c9'];
+function shapeSVG(name, color, size = 90){ return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" class="shape-svg" aria-hidden="true"><g fill="${color}" stroke="#3b2a4a" stroke-width="3" stroke-linejoin="round">${SHAPES[name].d}</g></svg>`; }
+function shapeFacts(n){ const s = SHAPES[n]; return s.sides === null ? `A heart has curvy sides.` : s.sides === 0 ? `A ${n} is round. It has no sides and no corners.` : `A ${n} has ${s.sides} sides and ${s.corners} corners.`; }
+function mShapes(){
+  MZ(`${tip('Count the sides (the straight lines) and the corners (where two sides meet).')}
+    <div class="grid lesson-grid shape-cards">${Object.keys(SHAPES).map((n, i) => `<button class="lesson-card shape-card" onclick="${sayAttr(`${n}. ${shapeFacts(n)} Like ${SHAPES[n].ex.replace(/\p{Extended_Pictographic}/gu, '')}.`)}">${shapeSVG(n, SHAPE_COLORS[i % SHAPE_COLORS.length], 84)}<h3>${n[0].toUpperCase() + n.slice(1)}</h3><small>${SHAPES[n].sides === null ? 'curvy sides' : SHAPES[n].sides === 0 ? 'no sides · no corners' : `${SHAPES[n].sides} sides · ${SHAPES[n].corners} corners`}</small><small>Like ${SHAPES[n].ex}</small></button>`).join('')}</div>
+    <h2 style="margin-top:22px">🎯 Shape game</h2><div id="mathGame"></div>`);
+  mathRound('mathGame', () => {
+    const names = Object.keys(SHAPES);
+    if (Math.random() < .5){
+      const t = pick(names), opts = shuffle([t, ...shuffle(names.filter(n => n !== t)).slice(0, 3)]);
+      return {q:`Tap the ${t}!`, opts:opts.map((n, i) => ({label:n, html:shapeSVG(n, SHAPE_COLORS[i % SHAPE_COLORS.length], 80)})), ans:t, explain:shapeFacts(t)};
+    }
+    const t = pick(names.filter(n => SHAPES[n].sides > 0 && SHAPES[n].sides <= 8));
+    return {q:'How many sides does this shape have?', visual:`<div style="margin:8px 0">${shapeSVG(t, pick(SHAPE_COLORS), 130)}</div>`, opts:numOpts(SHAPES[t].sides, 3, 3), ans:SHAPES[t].sides, explain:`It is a ${t}. ${shapeFacts(t)}`};
+  });
+}
+
+/* ---------- Patterns ---------- */
+const PAT_SETS = [['🔴','🔵','🟢'],['🍎','🍌','🍇'],['⭐','🌙','☀️'],['🐶','🐱','🐰'],['🟥','🟨','🟦'],['❤️','💛','💜'],['🔺','⚪','🟩']];
+const PAT_UNITS = [[0,1],[0,0,1],[0,1,1],[0,1,2],[0,0,1,1]];
+function mPatterns(){
+  MZ(`${tip('A pattern repeats again and again. Say it out loud to hear the pattern!')}
+    <h2>➡️ What comes next?</h2><div id="mathGame"></div>
+    <h2 style="margin-top:22px">🎨 Make your own pattern</h2><p class="muted">Tap the pictures to build a pattern. I’ll tell you when it repeats!</p>
+    <div class="pat-build" id="patBuild"></div><div class="row-buttons" id="patPick">${['🔴','🔵','🟢','🟡','⭐','❤️','🐱','🍎'].map(x => `<button class="tool-btn" style="width:58px">${x}</button>`).join('')}<button class="btn small warn" id="patClear">Clear</button></div><p class="feedback" id="patFb"></p>`);
+  mathRound('mathGame', () => {
+    const set = pick(PAT_SETS), unit = pick(PAT_UNITS), len = unit.length * 2 + rand(1, unit.length), seq = Array.from({length:len + 1}, (_, i) => set[unit[i % unit.length]]);
+    const missingMid = Math.random() < .35, hole = missingMid ? rand(1, len - 1) : len;
+    const show = seq.slice(0, missingMid ? len : len).map((x, i) => i === hole ? '❓' : x).concat(missingMid ? [] : ['❓']);
+    const ans = seq[hole], opts = shuffle([...new Set([ans, ...set])]);
+    return {q:missingMid ? 'Which one is missing?' : 'What comes next?', visual:`<div class="q-visual">${show.join(' ')}</div>`, opts, ans, explain:'The pattern keeps repeating.'};
+  });
+  const seq = [], build = document.getElementById('patBuild'), fb = document.getElementById('patFb');
+  const draw = () => { build.innerHTML = seq.map(x => `<span>${x}</span>`).join('') || '<span class="tiny">Your pattern goes here</span>'; };
+  draw();
+  document.querySelectorAll('#patPick .tool-btn').forEach(b => b.onclick = () => {
+    if (seq.length >= 12) return; seq.push(b.textContent); draw(); Sfx.pop();
+    for (let k = 2; k <= 4; k++){
+      if (seq.length >= k * 2 && seq.every((x, i) => x === seq[i % k]) && new Set(seq.slice(0, k)).size > 1){
+        const name = seq.slice(0, k).map(x => String.fromCharCode(65 + [...new Set(seq.slice(0, k))].indexOf(x))).join('');
+        fb.className = 'feedback good'; fb.textContent = `🌟 You made a pattern! It goes ${name} ${name}…`;
+        if (seq.length === k * 2){ recordResult('math', true, build); speak(`You made a pattern! ${name.split('').join(' ')}, ${name.split('').join(' ')}.`, {quiet:true}); }
+        return;
+      }
+    }
+    fb.className = 'feedback'; fb.textContent = seq.length >= 4 ? 'Keep going! Try repeating the same pictures again.' : '';
+  });
+  document.getElementById('patClear').onclick = () => { seq.length = 0; draw(); fb.textContent = ''; };
+}
+
+/* ---------- Puzzles ---------- */
+function mPuzzles(){
+  MZ(`${tip('Puzzles make your brain strong! Take your time and use your fingers to help.')}
+    <h2>🔟 Make 10</h2><p class="muted">Tap two cards that add up to 10.</p><div id="make10"></div>
+    <h2 style="margin-top:22px">🏠 Number bond houses</h2><div id="mathGame"></div>`);
+  make10();
+  mathRound('mathGame', () => {
+    const whole = rand(3, 10), p1 = rand(1, whole - 1), p2 = whole - p1, hide = pick(['whole', 'p1', 'p2']);
+    const v = {whole, p1, p2}, ans = v[hide];
+    const box = k => `<div class="bond-box ${k === hide ? 'q' : ''}">${k === hide ? '?' : v[k]}</div>`;
+    const visual = `<div class="bond"><div class="bond-roof">${box('whole')}</div><div class="bond-legs"><span></span><span></span></div><div class="bond-parts">${box('p1')}${box('p2')}</div></div>`;
+    const sentence = hide === 'whole' ? `${p1} + ${p2} = ?` : hide === 'p1' ? `? + ${p2} = ${whole}` : `${p1} + ? = ${whole}`;
+    return {q:sentence, say:hide === 'whole' ? `${p1} and ${p2} make what?` : `What number and ${hide === 'p1' ? p2 : p1} make ${whole}?`, visual, opts:numOpts(ans), ans, explain:`${p1} and ${p2} make ${whole}.`};
+  });
+}
+function make10(){
+  const z = document.getElementById('make10'); if (!z) return;
+  const pairs = shuffle([[1, 9], [2, 8], [3, 7], [4, 6], [5, 5], [0, 10]]).slice(0, 4);
+  const cards = shuffle(pairs.flat()); let sel = null, found = 0;
+  z.innerHTML = `<div class="make10">${cards.map(n => `<button class="m10" data-n="${n}">${n}</button>`).join('')}</div><p class="feedback m-fb"></p><button class="btn m-next" onclick="make10()">New cards →</button>`;
+  z.querySelectorAll('.m10').forEach(b => b.onclick = () => {
+    if (b.classList.contains('done')) return;
+    if (!sel){ sel = b; b.classList.add('picked'); Sfx.tap(); return; }
+    if (sel === b){ b.classList.remove('picked'); sel = null; return; }
+    const a = +sel.dataset.n, c = +b.dataset.n;
+    if (a + c === 10){ [sel, b].forEach(x => { x.classList.remove('picked'); x.classList.add('done'); }); found++; Sfx.good(); speak(`${a} and ${c} make 10!`, {quiet:true});
+      if (found === pairs.length) setTimeout(() => { confetti(); mathWin(b, z, 'You made 10 every time!'); }, 900); }
+    else { sel.classList.remove('picked'); b.classList.add('miss'); setTimeout(() => b.classList.remove('miss'), 600); Sfx.bad(); speak(`${a} and ${c} make ${a + c}. Try again!`, {quiet:true}); }
+    sel = null;
+  });
+}
+
+/* Richer quiz questions (used by the Math quiz and the daily routine) */
+function mathItem(){
+  const E = pick(OBJ), type = pick(['add','add','sub','count','compare','next','skip','oddeven','shape','pattern','bond','moreless']);
+  if (type === 'add'){ const a = rand(1, 6), b = rand(1, 4); return {q:`${a} + ${b} = ?`, visual:`${E.repeat(a)} ➕ ${E.repeat(b)}`, choices:numChoices(a + b), a:String(a + b), explain:`${a} plus ${b} equals ${a + b}.`}; }
+  if (type === 'sub'){ const a = rand(3, 9), b = rand(1, a - 1); return {q:`${a} − ${b} = ?`, visual:E.repeat(a), say:`${a} take away ${b}. How many are left?`, choices:numChoices(a - b), a:String(a - b), explain:`${a} take away ${b} leaves ${a - b}.`}; }
+  if (type === 'count'){ const n = rand(3, 12); return {q:'How many can you count?', visual:E.repeat(n), choices:numChoices(n), a:String(n), explain:`There are ${n}.`}; }
+  if (type === 'compare'){ const a = rand(1, 20); let b = rand(1, 20); while (b === a) b = rand(1, 20); return {q:'Which number is bigger?', choices:[String(a), String(b)], a:String(Math.max(a, b)), explain:`${Math.max(a, b)} is bigger than ${Math.min(a, b)}.`}; }
+  if (type === 'skip'){ const s = pick([2, 5, 10]), st = s * rand(1, 3), arr = [st, st + s, st + 2 * s]; return {q:`Count by ${s}s: ${arr.join(', ')}, __`, say:`Count by ${s}s. ${arr.join(', ')}. What comes next?`, choices:shuffle([st + 3 * s, st + 3 * s + 1, st + 3 * s - 1].map(String)), a:String(st + 3 * s), explain:`${arr.join(', ')}, ${st + 3 * s}.`}; }
+  if (type === 'oddeven'){ const n = rand(1, 20), a = n % 2 ? 'odd' : 'even'; return {q:`Is ${n} odd or even?`, choices:['odd', 'even'], a, explain:`${n} is ${a}.`}; }
+  if (type === 'shape'){ const t = pick(['triangle','square','rectangle','pentagon','hexagon','octagon']); return {q:'How many sides does this shape have?', html:`<div style="margin:8px 0">${shapeSVG(t, pick(SHAPE_COLORS), 120)}</div>`, choices:numChoices(SHAPES[t].sides), a:String(SHAPES[t].sides), explain:`It is a ${t}. ${shapeFacts(t)}`}; }
+  if (type === 'pattern'){ const set = pick(PAT_SETS), u = pick(PAT_UNITS), seq = Array.from({length:u.length * 2 + 1}, (_, i) => set[u[i % u.length]]), ans = seq.pop(); return {q:'What comes next?', visual:seq.join(' ') + ' ❓', say:'Look at the pattern. What comes next?', choices:shuffle([...new Set([ans, ...set])]), a:ans, explain:'The pattern repeats.'}; }
+  if (type === 'bond'){ const w = rand(4, 10), p = rand(1, w - 1); return {q:`${p} + ? = ${w}`, say:`What number and ${p} make ${w}?`, choices:numChoices(w - p), a:String(w - p), explain:`${p} and ${w - p} make ${w}.`}; }
+  if (type === 'moreless'){ const n = rand(2, 19), m = Math.random() < .5, a = m ? n + 1 : n - 1; return {q:`What is 1 ${m ? 'more' : 'less'} than ${n}?`, choices:numChoices(a), a:String(a), explain:`1 ${m ? 'more' : 'less'} than ${n} is ${a}.`}; }
+  const n = rand(1, 18); return {q:`What number comes after ${n}?`, choices:numChoices(n + 1), a:String(n + 1), explain:`After ${n} comes ${n + 1}.`};
 }
 
 /* ---------- start ---------- */
