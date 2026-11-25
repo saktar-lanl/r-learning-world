@@ -450,7 +450,7 @@ const bodyParts = [
   {id:'hand',name:'Hands',fact:'Hands help you hold, draw and wave.'},
   {id:'leg',name:'Legs',fact:'Legs help you stand, walk and jump.'},
   {id:'foot',name:'Feet',fact:'Feet help you balance and walk.'},
-  {id:'bones',name:'Bones / Skeleton',fact:'Bones hold your body up and protect your organs.'}
+  {id:'bones',name:'Bones / Skeleton',fact:'Bones hold your body up and protect the soft parts inside, like your brain, heart and lungs.'}
 ];
 let activeBodyPart = 'head';
 
@@ -494,36 +494,55 @@ const illustratedStories = [
 ];
 
 /* ---------- pictures (from the original site) ---------- */
-function bodySVG(active='head'){
-  if (active === 'bones') return skeletonSVG(activeBone, false);
-  const hi = id => active===id ? '#ffb74d' : '#7fbee9';
-  return `<svg viewBox="0 0 340 600" width="100%" aria-label="Kid-friendly body diagram">
-    <circle cx="170" cy="82" r="48" fill="#ffd9c9" stroke="#80594a" stroke-width="2"/>
-    <rect x="130" y="130" width="80" height="150" rx="30" fill="#7fd1ff" stroke="#4e7e9a" stroke-width="2"/>
-    <rect x="82" y="145" width="42" height="120" rx="20" fill="#ffd9c9" stroke="#80594a" stroke-width="2"/>
-    <rect x="216" y="145" width="42" height="120" rx="20" fill="#ffd9c9" stroke="#80594a" stroke-width="2"/>
-    <rect x="138" y="280" width="28" height="170" rx="16" fill="#ffd9c9" stroke="#80594a" stroke-width="2"/>
-    <rect x="174" y="280" width="28" height="170" rx="16" fill="#ffd9c9" stroke="#80594a" stroke-width="2"/>
-    <rect x="126" y="448" width="52" height="24" rx="10" fill="#c3e27a" stroke="#6c8d35" stroke-width="2"/>
-    <rect x="166" y="448" width="52" height="24" rx="10" fill="#c3e27a" stroke="#6c8d35" stroke-width="2"/>
-    <circle cx="152" cy="92" r="6" fill="#342547"/>
-    <circle cx="188" cy="92" r="6" fill="#342547"/>
-    <path d="M153 120 Q170 134 187 120" fill="none" stroke="#a24a60" stroke-width="4" stroke-linecap="round"/>
-    <circle cx="170" cy="108" r="4" fill="#ff9c87"/>
-    <ellipse cx="152" cy="210" rx="18" ry="24" fill="${hi('heart')}" opacity=".95"/>
-    <ellipse cx="187" cy="210" rx="22" ry="28" fill="${hi('lungs')}" opacity=".75"/>
-    <ellipse cx="152" cy="212" rx="22" ry="28" fill="${hi('lungs')}" opacity=".75"/>
-    <ellipse cx="170" cy="270" rx="34" ry="28" fill="${hi('stomach')}" opacity=".8"/>
-    <circle cx="170" cy="82" r="52" fill="transparent" stroke="${hi('head')}" stroke-width="6"/>
-    <circle cx="170" cy="92" r="18" fill="transparent" stroke="${hi('eye')}" stroke-width="4" opacity="${active==='eye'?1:0}"/>
-    <circle cx="117" cy="95" r="13" fill="transparent" stroke="${hi('ear')}" stroke-width="6"/>
-    <path d="M170 100 L170 115" stroke="${hi('nose')}" stroke-width="6" stroke-linecap="round"/>
-    <path d="M150 122 Q170 142 190 122" fill="none" stroke="${hi('mouth')}" stroke-width="6" stroke-linecap="round"/>
-    <rect x="76" y="145" width="188" height="125" rx="28" fill="transparent" stroke="${hi('arm')}" stroke-width="6" opacity=".9"/>
-    <rect x="36" y="286" width="44" height="38" rx="12" fill="transparent" stroke="${hi('hand')}" stroke-width="6"/>
-    <rect x="126" y="278" width="78" height="174" rx="20" fill="transparent" stroke="${hi('leg')}" stroke-width="6"/>
-    <rect x="120" y="442" width="102" height="38" rx="14" fill="transparent" stroke="${hi('foot')}" stroke-width="6"/>
-  </svg>`;
+function bodySVG(active = 'head'){
+  if (active === 'bones') return skeletonSVG('', false);
+  const SKIN = '#f8cfb2', LINE = '#b97c5c', on = id => active === id;
+  const limb = (x1, y1, x2, y2, w, c = SKIN) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${LINE}" stroke-width="${w + 5}" stroke-linecap="round"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const ring = (id, shape) => on(id) ? `<g class="hl-ring">${shape}</g>` : '';
+  const glow = id => on(id) ? 'filter="url(#bodyGlow)"' : '';
+  const lung = X => `M${X(163)} 178 C${X(141)} 170 ${X(124)} 190 ${X(124)} 220 C${X(124)} 246 ${X(140)} 256 ${X(157)} 248 C${X(163)} 245 ${X(165)} 236 ${X(165)} 226 Z`;
+  const M = x => 340 - x, I = x => x;
+  return `<svg viewBox="0 0 340 560" width="100%" role="img" aria-label="Cartoon body diagram${active ? ': ' + active + ' is glowing' : ''}">
+  <defs><filter id="bodyGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="b"/><feFlood flood-color="#ffb020"/><feComposite in2="b" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <ellipse cx="170" cy="540" rx="110" ry="12" fill="#d7ebf7"/>
+  <!-- legs and shoes -->
+  <g ${glow('leg')}>${limb(144, 352, 140, 492, 28)}${limb(196, 352, 200, 492, 28)}</g>
+  <g ${glow('foot')}><path d="M112 512 Q112 494 140 494 Q160 494 160 510 Q160 522 136 522 Q112 522 112 512 Z" fill="#ff7aa8" stroke="#d44f80" stroke-width="3"/><path d="M228 512 Q228 494 200 494 Q180 494 180 510 Q180 522 204 522 Q228 522 228 512 Z" fill="#ff7aa8" stroke="#d44f80" stroke-width="3"/><path d="M118 512 H156 M222 512 H184" stroke="#fff" stroke-width="3" opacity=".7"/></g>
+  <!-- shorts -->
+  <path d="M112 296 Q170 308 228 296 L234 356 L178 356 L170 334 L162 356 L106 356 Z" fill="#8b6cf0" stroke="#6248c8" stroke-width="3"/>
+  <!-- arms and hands -->
+  <g ${glow('arm')}>${limb(116, 178, 86, 290, 24)}${limb(224, 178, 254, 290, 24)}<path d="M108 170 Q116 160 132 162 L128 196 L104 192 Z M232 170 Q224 160 208 162 L212 196 L236 192 Z" fill="#7cd3f7" stroke="#3f9cc8" stroke-width="3"/></g>
+  <g ${glow('hand')}><circle cx="82" cy="306" r="16" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/><ellipse cx="96" cy="298" rx="6" ry="9" transform="rotate(-30 96 298)" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/><circle cx="258" cy="306" r="16" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/><ellipse cx="244" cy="298" rx="6" ry="9" transform="rotate(30 244 298)" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/></g>
+  <!-- body with a see-inside window -->
+  <path d="M122 166 Q170 152 218 166 Q230 170 230 186 L226 300 Q170 312 114 300 L110 186 Q110 170 122 166 Z" fill="#7cd3f7" stroke="#3f9cc8" stroke-width="3"/>
+  <rect x="124" y="172" width="92" height="124" rx="30" fill="#fff4ec" stroke="#3f9cc8" stroke-width="2" stroke-dasharray="6 5"/>
+  <g ${glow('lungs')} opacity="${on('lungs') ? 1 : .85}"><path d="${lung(I)}" fill="${on('lungs') ? '#ff8fab' : '#ffc4d1'}" stroke="#e07a91" stroke-width="2.5"/><path d="${lung(M)}" fill="${on('lungs') ? '#ff8fab' : '#ffc4d1'}" stroke="#e07a91" stroke-width="2.5"/><path d="M170 176 V196 M170 196 Q160 202 152 210 M170 196 Q180 202 188 210" stroke="#e07a91" stroke-width="3" fill="none"/></g>
+  <g ${glow('heart')}><path d="M180 236 C160 222 160 202 172 202 C176 202 179 205 180 209 C181 205 184 202 188 202 C200 202 200 222 180 236 Z" fill="${on('heart') ? '#ff2e55' : '#ff5c7a'}" stroke="#c2183c" stroke-width="2.5"/></g>
+  <g ${glow('stomach')}><path d="M158 262 C160 248 190 246 200 260 C208 274 198 292 180 290 C168 289 172 278 158 272 Z" fill="${on('stomach') ? '#ffad4d' : '#ffd29a'}" stroke="#e0903a" stroke-width="2.5"/></g>
+  <!-- neck and head -->
+  <rect x="160" y="140" width="20" height="24" rx="6" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/>
+  <g ${glow('ear')}><circle cx="116" cy="100" r="12" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/><circle cx="224" cy="100" r="12" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/><path d="M114 96 q5 4 0 9 M226 96 q-5 4 0 9" stroke="${LINE}" stroke-width="2" fill="none"/></g>
+  <g ${glow('head')}><circle cx="170" cy="96" r="54" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/></g>
+  <path d="M116 98 C110 46 148 30 172 32 C204 32 232 52 224 100 C214 74 200 62 186 64 C180 74 160 78 140 76 C130 82 120 90 116 98 Z" fill="#4a2e2a"/>
+  <path d="M222 70 C246 80 246 120 232 138 C230 120 228 100 222 90 Z" fill="#4a2e2a"/><circle cx="226" cy="64" r="9" fill="#ff7aa8"/>
+  <g ${glow('eye')}><ellipse cx="151" cy="100" rx="11" ry="12" fill="#fff" stroke="#5a4366" stroke-width="2"/><ellipse cx="189" cy="100" rx="11" ry="12" fill="#fff" stroke="#5a4366" stroke-width="2"/><circle cx="152" cy="102" r="6.5" fill="#3b2a4a"/><circle cx="190" cy="102" r="6.5" fill="#3b2a4a"/><circle cx="154" cy="99" r="2.2" fill="#fff"/><circle cx="192" cy="99" r="2.2" fill="#fff"/></g>
+  <circle cx="138" cy="120" r="8" fill="#ff9fae" opacity=".55"/><circle cx="202" cy="120" r="8" fill="#ff9fae" opacity=".55"/>
+  <g ${glow('nose')}><path d="M170 106 Q164 116 171 117" fill="none" stroke="${LINE}" stroke-width="3" stroke-linecap="round"/></g>
+  <g ${glow('mouth')}><path d="M154 126 Q170 142 186 126 Q170 132 154 126 Z" fill="#c2405e" stroke="#a02c48" stroke-width="2.5" stroke-linejoin="round"/></g>
+  <!-- glowing rings for the chosen part -->
+  ${ring('head', '<circle cx="170" cy="92" r="64"/>')}
+  ${ring('eye', '<circle cx="151" cy="100" r="18"/><circle cx="189" cy="100" r="18"/>')}
+  ${ring('ear', '<circle cx="116" cy="100" r="19"/><circle cx="224" cy="100" r="19"/>')}
+  ${ring('nose', '<circle cx="170" cy="112" r="13"/>')}
+  ${ring('mouth', '<ellipse cx="170" cy="131" rx="24" ry="13"/>')}
+  ${ring('heart', '<circle cx="180" cy="218" r="25"/>')}
+  ${ring('lungs', '<ellipse cx="170" cy="213" rx="56" ry="46"/>')}
+  ${ring('stomach', '<ellipse cx="180" cy="270" rx="32" ry="26"/>')}
+  ${ring('arm', '<rect x="62" y="158" width="64" height="146" rx="30" transform="rotate(14 94 231)"/><rect x="214" y="158" width="64" height="146" rx="30" transform="rotate(-14 246 231)"/>')}
+  ${ring('hand', '<circle cx="84" cy="304" r="27"/><circle cx="256" cy="304" r="27"/>')}
+  ${ring('leg', '<rect x="122" y="344" width="40" height="160" rx="20"/><rect x="178" y="344" width="40" height="160" rx="20"/>')}
+  ${ring('foot', '<ellipse cx="136" cy="510" rx="34" ry="22"/><ellipse cx="204" cy="510" rx="34" ry="22"/>')}
+</svg>`;
 }
 function storyPicture(scene){
  const tree='<rect x="249" y="105" width="22" height="103" rx="5" fill="#98623d"/><circle cx="260" cy="90" r="56" fill="#70be73"/><circle cx="225" cy="104" r="33" fill="#83cf7c"/>';
@@ -1004,7 +1023,7 @@ function renderBodyLearn(){
   <section class="panel">
     <div class="section-title"><h1>🧍 Learn: Human body</h1>${speakBtn('Tap a body part to learn about it.')}</div>
     <div class="body-wrap">
-      <div class="svg-box">${bodySVG(activeBodyPart)}<div class="skeleton-tip">🦴 Tap <strong>Bones / Skeleton</strong>, or explore every bone in the <a href="#skeleton" onclick="document.getElementById('skeleton').scrollIntoView({behavior:'smooth'});return false">Skeleton explorer</a> below.</div></div>
+      <div class="svg-box">${bodySVG(activeBodyPart)}<div class="skeleton-tip">🦴 Tap <strong>Bones / Skeleton</strong> to see the bones inside, or <a href="#skeleton" onclick="document.getElementById('skeleton').scrollIntoView({behavior:'smooth'});return false">explore each bone below ↓</a></div></div>
       <div>
         <div class="fact"><h3>${p.name}</h3><p style="font-size:22px">${p.fact}</p><div class="row-buttons">${speakBtn(p.name + '. ' + p.fact, 'Listen')}</div></div>
         <div class="label-list">${bodyParts.map(x => `<button class="body-btn ${x.id === activeBodyPart ? 'active' : ''}" onclick="pickBodyPart('${x.id}')">${x.name}</button>`).join('')}</div>
