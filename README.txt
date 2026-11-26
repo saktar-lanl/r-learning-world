@@ -1,14 +1,15 @@
-Ruhaimah's Learning World — version 4
+Ruhaimah's Learning World — version 5
 
-Upload these 16 files to the root of your GitHub Pages repository, replacing the old ones (same file names):
-  index.html, app.js, style.css,
-  reading.html, math.html, english.html, science.html, body.html, logic.html,
-  school.html, general.html, geo.html, rhymes.html, art.html, chess.html,
-  games.html  (NEW: Tic-Tac-Toe and Memory Match)
+Upload ALL of these files to the root of your GitHub Pages repository, replacing the old ones (same names):
+  index.html, app.js, style.css, world.json
+  reading.html, math.html, english.html, science.html, body.html, logic.html, school.html,
+  general.html, geo.html, rhymes.html, art.html, chess.html, games.html
+  alphabets.html   (NEW: Bangla & Arabic letters)
+  world.json       (NEW: the world map shapes; must sit next to app.js)
 
-NEW in this version: Daily Routine — 5 checks a day, then a surprise sticker based on her score, saved in a sticker book.
-NEW: Reading & phonics hub — letter sounds, blending, word families, sight words and read-aloud with microphone checking.
-NEW: Math playground with counting, adding, take away, skip counting, more/less, odd & even, shapes, patterns and puzzles.
-Do not upload the ZIP itself. Saved stars and progress carry over (same storage keys).
-Maps and the rounded font need internet; everything else works offline once loaded.
-Voice quality depends on the voices on the device: see Settings for tips on adding a natural voice.
+Do not upload the ZIP itself. Saved stars, stickers and progress carry over.
+
+Needs internet: USA/Bangladesh maps, country flag pictures, fonts, and speech checking in Chrome/Edge.
+Everything else, including the world map, works from the uploaded files.
+Voices: Bangla and Arabic letters use a native voice when the device has one (Android/Edge usually do);
+otherwise an English helper voice says the letter names. See Settings in the app for tips.

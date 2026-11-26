@@ -62,6 +62,7 @@ function toast(msg){
   clearTimeout(toast._id); toast._id = setTimeout(() => t.classList.remove('show'), 2300);
 }
 function show(html){
+  html = String(html).replace(/>([^<]*)\bNaN\b/g, '>$10').replace(/>([^<]*)\bundefined\b/g, '>$1');
   if (typeof Listen !== 'undefined') Listen.stop();
   app.innerHTML = html;
   window.scrollTo({top:0, behavior:'auto'});
@@ -108,7 +109,7 @@ const Voice = {
   pick(){ const en = this.english(); return en.find(v => v.voiceURI === voicePrefs.voiceURI) || en[0] || null; }
 };
 function cleanForSpeech(t){
-  return String(t)
+  return String(t == null ? '' : t).replace(/\bNaN\b|\bundefined\b|\bnull\b/g, '')
     .replace(/\p{Extended_Pictographic}|️|‍/gu, '')
     .replace(/\s*\+\s*/g, ' plus ').replace(/\s*=\s*\?/g, ' equals what?').replace(/\s*=\s*/g, ' equals ')
     .replace(/(\d)\s*[−-]\s*(\d)/g, '$1 minus $2')
@@ -135,7 +136,7 @@ function speak(text, opts = {}){
   if (!synth){ if (!opts.quiet) toast('This browser cannot speak. Try Chrome, Edge or Safari.'); return Promise.resolve(false); }
   stopSpeaking();
   const token = speechToken;
-  const v = Voice.pick();
+  const v = opts.lang ? (Voice.forLang(opts.lang) || Voice.pick()) : Voice.pick();
   const lines = Array.isArray(text) ? text : [text];
   const chunks = [];
   lines.forEach((line, li) => { const c = cleanForSpeech(line); if (c) chunkText(c).forEach(x => chunks.push({text:x, part:li})); });
@@ -260,7 +261,8 @@ const subjects = [
   {key:'rhymes', emoji:'🎵', title:'Rhymes', desc:'Nursery rhymes to read and repeat', color:'#fff1c2'},
   {key:'art', emoji:'🎨', title:'Art studio', desc:'Draw, stamp, trace and save', color:'#ffe1ef'},
   {key:'chess', emoji:'♟️', title:'Chess', desc:'How each piece moves', color:'#e9e5ff'},
-  {key:'games', emoji:'🎲', title:'Games', desc:'Tic-tac-toe and memory match', color:'#ffdfe6', isNew:true}
+  {key:'alphabets', emoji:'🔤', title:'Bangla & Arabic', desc:'বাংলা and العربية letters, words and numbers', color:'#e2f5dc', isNew:true},
+  {key:'games', emoji:'🎲', title:'Games', desc:'Tic-tac-toe, memory and color games', color:'#ffdfe6'}
 ];
 const subj = k => subjects.find(s => s.key === k) || subjects[0];
 
@@ -324,101 +326,6 @@ const lessons = {
     ['🔺','Shapes','circle ⚪ square 🟥 triangle 🔺 star ⭐','Circle. Square. Triangle. Star.'],
     ['🌦️','Weather','sunny ☀️ rainy 🌧️ snowy ❄️ windy 🌬️','The weather can be sunny, rainy, snowy, or windy.'],
     ['🌈','Rainbow colors','red, orange, yellow, green, blue, purple','The rainbow colors are red, orange, yellow, green, blue, and purple.']
-  ]
-};
-
-/* ---------- quiz banks (5 random questions each time) ---------- */
-const quizBank = {
-  english:[
-    {q:'Which is the opposite of big?', choices:['small','loud','run'], a:'small', explain:'Small is the opposite of big.'},
-    {q:'Which is the opposite of hot?', choices:['cold','wet','tall'], a:'cold', explain:'Cold is the opposite of hot.'},
-    {q:'Which sentence is written correctly?', choices:['i like cats.','I like cats.','i Like cats'], a:'I like cats.', explain:'A sentence starts with a capital letter and ends with a period.'},
-    {q:'Which word means more than one dog?', choices:['dogs','dog','a dog'], a:'dogs', explain:'Dogs means more than one dog.'},
-    {q:'Which word is an action?', choices:['jump','table','blue'], a:'jump', explain:'Jump is something you can do.'},
-    {q:'Which word is a thing?', choices:['ball','run','happy'], a:'ball', explain:'A ball is a thing. It is a naming word.'},
-    {q:'What goes at the end of a question?', choices:['?','.','!'], a:'?', say:'What goes at the end of a question? A question mark, a period, or an exclamation mark?', explain:'A question ends with a question mark.'},
-    {q:'Which word rhymes with cake?', choices:['lake','cat','sun'], a:'lake', explain:'Cake and lake rhyme.'},
-    {q:'Which letter is a vowel?', choices:['a','b','t'], a:'a', explain:'A is a vowel. The vowels are a, e, i, o, u.'},
-    {q:'Which is the opposite of up?', choices:['down','in','fast'], a:'down', explain:'Down is the opposite of up.'}
-  ],
-  science:[
-    {q:'Which planet do we live on?', choices:['Mars','Earth','Jupiter'], a:'Earth', explain:'We live on Earth.'},
-    {q:'What do plants need to grow?', choices:['sunlight and water','shoes','television'], a:'sunlight and water', explain:'Plants need sunlight and water.'},
-    {q:'Which one is a star?', choices:['the Moon','the Sun','Earth'], a:'the Sun', explain:'The Sun is a star.'},
-    {q:'Which planet comes after Earth?', choices:['Venus','Mars','Saturn'], a:'Mars', explain:'The order is Mercury, Venus, Earth, Mars.'},
-    {q:'Which planet has big rings?', choices:['Earth','Saturn','Mars'], a:'Saturn', explain:'Saturn is famous for its rings.'},
-    {q:'Which is the biggest planet?', choices:['Jupiter','Mercury','Earth'], a:'Jupiter', explain:'Jupiter is the biggest planet.'},
-    {q:'What does a caterpillar turn into?', choices:['a butterfly','a frog','a bird'], a:'a butterfly', explain:'A caterpillar becomes a butterfly.'},
-    {q:'Where does a fish live?', choices:['in water','in a tree','in the sky'], a:'in water', explain:'Fish live in water.'},
-    {q:'What is ice?', choices:['frozen water','hot sand','a cloud'], a:'frozen water', explain:'Ice is frozen water.'},
-    {q:'What does a magnet pull?', choices:['paper clips','paper','wood'], a:'paper clips', explain:'Magnets pull things made of iron, like paper clips.'}
-  ],
-  logic:[
-    {q:'What comes next?', visual:'🔴 🔵 🔴 🔵 🔴 ❓', say:'Red, blue, red, blue, red. What comes next?', choices:['🔵','🔴','🟢'], a:'🔵', explain:'The pattern repeats red, blue.'},
-    {q:'What comes next?', visual:'⭐ ⭐ 🌙 ⭐ ⭐ 🌙 ⭐ ❓', say:'Star, star, moon, star, star, moon, star. What comes next?', choices:['⭐','🌙','☀️'], a:'⭐', explain:'Star, star, moon. So after one star comes another star.'},
-    {q:'Which is the odd one out?', visual:'🍎 🍌 🚗 🍇', say:'Apple, banana, car, grapes. Which is the odd one out?', choices:['🍎','🚗','🍇'], a:'🚗', explain:'The car is not a fruit.'},
-    {q:'Which is the odd one out?', visual:'🐶 🐱 🐰 🌳', say:'Dog, cat, rabbit, tree. Which is the odd one out?', choices:['🌳','🐱','🐰'], a:'🌳', explain:'The tree is not an animal.'},
-    {q:'Which is the biggest number?', choices:['4','9','2'], a:'9', explain:'Nine is the biggest.'},
-    {q:'Which is the smallest number?', choices:['7','3','5'], a:'3', explain:'Three is the smallest.'},
-    {q:'Which animal is the biggest?', choices:['🐘','🐭','🐱'], a:'🐘', say:'Which animal is the biggest? Elephant, mouse, or cat?', explain:'The elephant is the biggest.'},
-    {q:'How many sides does a triangle have?', choices:['3','4','5'], a:'3', explain:'A triangle has three sides.'},
-    {q:'What comes next? 2, 4, 6, …', choices:['8','7','10'], a:'8', say:'Two, four, six. What comes next?', explain:'We count by twos: 2, 4, 6, 8.'},
-    {q:'Which one is a fruit?', choices:['🍓','🥕','🍞'], a:'🍓', say:'Which one is a fruit? Strawberry, carrot, or bread?', explain:'A strawberry is a fruit.'}
-  ],
-  school:[
-    {q:'Which letter comes after B?', choices:['C','A','D'], a:'C', explain:'A, B, C. C comes after B.'},
-    {q:'Which number comes after 7?', choices:['8','6','9'], a:'8', explain:'Seven, eight. Eight comes after seven.'},
-    {q:'Which shape is round?', choices:['circle','square','triangle'], a:'circle', explain:'A circle is round.'},
-    {q:'How many sides does a square have?', choices:['4','3','5'], a:'4', explain:'A square has four sides.'},
-    {q:'What should you do before you answer?', choices:['listen carefully','guess fast','close the screen'], a:'listen carefully', explain:'It is important to listen carefully.'},
-    {q:'After you finish, you should…', choices:['check your work','throw your pencil','skip everything'], a:'check your work', explain:'Checking helps you catch mistakes.'},
-    {q:'Which word starts with the letter M?', choices:['moon','sun','cat'], a:'moon', explain:'Moon starts with M.'},
-    {q:'What color do you get when you mix red and yellow?', choices:['orange','green','purple'], a:'orange', explain:'Red and yellow make orange.'},
-    {q:'Which is the letter S?', choices:['S','Z','C'], a:'S', say:'Which one is the letter S?', explain:'That is the letter S.'},
-    {q:'How many legs does a dog have?', choices:['4','2','6'], a:'4', explain:'A dog has four legs.'}
-  ],
-  general:[
-    {q:'How many seasons are there?', choices:['2','4','8'], a:'4', explain:'There are four seasons: spring, summer, fall and winter.'},
-    {q:'Which day comes after Monday?', choices:['Sunday','Tuesday','Friday'], a:'Tuesday', explain:'Tuesday comes after Monday.'},
-    {q:'How many days are in a week?', choices:['7','5','10'], a:'7', explain:'There are seven days in a week.'},
-    {q:'How many months are in a year?', choices:['12','7','10'], a:'12', explain:'There are twelve months in a year.'},
-    {q:'Which season is the coldest?', choices:['winter','summer','spring'], a:'winter', explain:'Winter is the coldest season.'},
-    {q:'What do you use on a rainy day?', choices:['an umbrella','sunglasses','a sled'], a:'an umbrella', explain:'An umbrella keeps you dry.'},
-    {q:'Which one can fly?', choices:['an airplane','a car','a boat'], a:'an airplane', explain:'An airplane flies in the sky.'},
-    {q:'Which month comes first?', choices:['January','June','December'], a:'January', explain:'January is the first month of the year.'},
-    {q:'When do we usually see stars?', choices:['at night','at lunch','in the morning'], a:'at night', explain:'We see stars at night.'},
-    {q:'Who helps us when we are sick?', choices:['a doctor','a pilot','a baker'], a:'a doctor', explain:'A doctor helps us when we are sick.'}
-  ],
-  rhymes:[
-    {q:'Which rhyme is about a star?', choices:['Twinkle, Twinkle, Little Star','Rain, Rain, Go Away','Humpty Dumpty'], a:'Twinkle, Twinkle, Little Star', explain:'Twinkle, Twinkle is about a little star.'},
-    {q:'Who sat on a wall?', choices:['Humpty Dumpty','Jack','Miss Muffet'], a:'Humpty Dumpty', explain:'Humpty Dumpty sat on a wall.'},
-    {q:'Where did Jack and Jill go?', choices:['up the hill','to the beach','to school'], a:'up the hill', explain:'Jack and Jill went up the hill.'},
-    {q:'What ran up the clock?', choices:['a mouse','a cat','a dog'], a:'a mouse', explain:'The mouse ran up the clock.'},
-    {q:'How many bags of wool did the black sheep have?', choices:['3','2','5'], a:'3', explain:'Three bags full!'},
-    {q:'Which word rhymes with star?', choices:['car','fish','book'], a:'car', explain:'Star and car rhyme.'},
-    {q:'Which word rhymes with hill?', choices:['Jill','hat','cup'], a:'Jill', explain:'Hill and Jill rhyme.'},
-    {q:'Which word rhymes with clock?', choices:['dock','cat','sun'], a:'dock', explain:'Clock and dock rhyme.'},
-    {q:'What do you row in the song?', choices:['a boat','a car','a bike'], a:'a boat', explain:'Row, row, row your boat.'}
-  ],
-  chess:[
-    {q:'Which piece moves in an L shape?', choices:['Knight ♘','King ♔','Rook ♖'], a:'Knight ♘', explain:'The knight moves in an L shape.'},
-    {q:'Which piece moves diagonally?', choices:['Bishop ♗','Pawn ♙','Rook ♖'], a:'Bishop ♗', explain:'The bishop moves diagonally.'},
-    {q:'Which piece moves in straight lines?', choices:['Rook ♖','Knight ♘','Bishop ♗'], a:'Rook ♖', explain:'The rook moves in straight lines.'},
-    {q:'Which piece can move in every direction, many squares?', choices:['Queen ♕','Pawn ♙','King ♔'], a:'Queen ♕', explain:'The queen is the strongest piece.'},
-    {q:'How far does the king move?', choices:['one square','two squares','across the board'], a:'one square', explain:'The king moves one square at a time.'},
-    {q:'Which piece can jump over other pieces?', choices:['Knight ♘','Rook ♖','Queen ♕'], a:'Knight ♘', explain:'Only the knight can jump.'},
-    {q:'How many squares are on a chess board?', choices:['64','20','100'], a:'64', explain:'A chess board has 64 squares, 8 by 8.'},
-    {q:'Which piece moves forward one square?', choices:['Pawn ♙','Bishop ♗','Queen ♕'], a:'Pawn ♙', explain:'The pawn moves forward.'}
-  ],
-  art:[
-    {q:'Red + yellow makes…', choices:['orange','green','purple'], a:'orange', say:'Red and yellow make what color?', explain:'Red and yellow make orange.'},
-    {q:'Blue + yellow makes…', choices:['green','orange','pink'], a:'green', say:'Blue and yellow make what color?', explain:'Blue and yellow make green.'},
-    {q:'Red + blue makes…', choices:['purple','yellow','brown'], a:'purple', say:'Red and blue make what color?', explain:'Red and blue make purple.'},
-    {q:'Red + white makes…', choices:['pink','black','blue'], a:'pink', say:'Red and white make what color?', explain:'Red and white make pink.'},
-    {q:'Which one is a color?', choices:['blue','circle','square'], a:'blue', explain:'Blue is a color.'},
-    {q:'How many sides does a triangle have?', choices:['3','4','5'], a:'3', explain:'A triangle has three sides.'},
-    {q:'What do you paint with?', choices:['a brush','a spoon','a shoe'], a:'a brush', explain:'We paint with a brush.'},
-    {q:'What color is the sky on a sunny day?', choices:['blue','green','black'], a:'blue', explain:'The sky is blue on a sunny day.'}
   ]
 };
 
@@ -545,6 +452,7 @@ function bodySVG(active = 'head'){
 </svg>`;
 }
 function storyPicture(scene){
+ if (scene && typeof scene === 'object') return emojiScene(scene);
  const tree='<rect x="249" y="105" width="22" height="103" rx="5" fill="#98623d"/><circle cx="260" cy="90" r="56" fill="#70be73"/><circle cx="225" cy="104" r="33" fill="#83cf7c"/>';
  const kid='<circle cx="89" cy="109" r="25" fill="#c98d65"/><path d="M65 106Q60 75 88 77Q116 75 115 108Q90 90 65 106" fill="#523735"/><circle cx="82" cy="110" r="2.5"/><circle cx="98" cy="110" r="2.5"/><path d="M84 120Q90 125 96 120" fill="none" stroke="#703f3a" stroke-width="2"/><path d="M69 140Q90 125 111 140L117 191H62Z" fill="#a184ea"/><path d="M77 190V218M103 190V218" stroke="#47567e" stroke-width="11" stroke-linecap="round"/><path d="M68 145L48 168M111 145L136 125" stroke="#c98d65" stroke-width="10" stroke-linecap="round"/>';
  const flower='<path d="M0 15V50" stroke="#40965c" stroke-width="5"/><ellipse cx="-9" cy="35" rx="12" ry="5" fill="#69ba68"/><g fill="#f4a0bd"><circle cx="-10" cy="0" r="10"/><circle cx="10" cy="0" r="10"/><circle cx="0" cy="-10" r="10"/><circle cx="0" cy="10" r="10"/></g><circle r="8" fill="#ffcf60"/>';
@@ -623,21 +531,15 @@ function pickBone(id){
   Sfx.tap(); speak(b.name + '. ' + b.fact, {quiet:true});
 }
 
-/* ---------- navigation (each subject has its own page) ---------- */
-const pageKey = document.body.dataset.subject || '';
-function nav(key, mode, extra = {}){
-  if (key === pageKey) return false;
-  stopSpeaking();
-  const q = mode && mode !== 'subject' ? '?' + new URLSearchParams({mode, ...extra}) : '';
-  location.href = (key || 'index') + '.html' + q;
-  return true;
-}
-function goHome(){ if (!nav('')) renderHome(); }
-function openSubject(k){ if (!nav(k)) renderSubject(k); }
-function startLearn(k){ if (!nav(k, 'learn')) renderLearn(k); }
-function startQuiz(k){ if (!nav(k, 'quiz')) renderQuiz(k); }
-function startPlay(k){ if (!nav(k, 'play')) renderPlay(k); }
-function openStory(i){ if (!nav('reading', 'story', {index:i})) renderStory(i); }
+/* ---------- navigation: no page reloads, browser back button works ---------- */
+let pageKey = document.body.dataset.subject || '';
+function nav(key, mode, extra = {}){ routeTo(key, mode || 'subject', extra); return true; }
+function goHome(){ routeTo('', 'subject'); }
+function openSubject(k){ routeTo(k, 'subject'); }
+function startLearn(k){ routeTo(k, 'learn'); }
+function startQuiz(k){ routeTo(k, 'quiz'); }
+function startPlay(k, game){ routeTo(k, 'play', game ? {game} : {}); }
+function openStory(i){ routeTo('reading', 'story', {index:i}); }
 function resumeNow(){
   const r = saved.resume;
   if (!r || !r.subject) return openRoutine();
@@ -715,8 +617,8 @@ function renderSubject(key){
     <div class="progress"><i style="width:${pct}%"></i></div>
     <div class="mode-grid">
       <div class="mode-card learn"><div class="bigicon">📘</div><h3>Learn</h3><p>Look, listen and explore.</p><button class="btn primary" onclick="startLearn('${key}')">Open Learn</button></div>
-      <div class="mode-card quiz"><div class="bigicon">📝</div><h3>${key === 'geo' ? 'Map quiz' : 'Quiz'}</h3><p>${key === 'geo' ? 'Find places on the map.' : '5 questions. Earn stars!'}</p><button class="btn gold" onclick="startQuiz('${key}')">Start Quiz</button></div>
-      <div class="mode-card play"><div class="bigicon">🎮</div><h3>Play</h3><p>${esc(playNames[key] || 'Mini game')}</p><button class="btn" style="background:#ffd3e8" onclick="startPlay('${key}')">Let’s play</button></div>
+      <div class="mode-card quiz"><div class="bigicon">📝</div><h3>Quiz</h3><p>5 mixed questions. Earn stars!</p><button class="btn gold" onclick="startQuiz('${key}')">Start Quiz</button></div>
+      <div class="mode-card play"><div class="bigicon">🎮</div><h3>Play</h3><p>${(PLAY_SETS[key] || []).length || 1} games: ${esc((PLAY_SETS[key] || [[0, playNames[key] || 'Mini game']]).slice(0, 3).map(x => x[1].replace(/^\S+ /, '')).join(', '))}…</p><button class="btn" style="background:#ffd3e8" onclick="startPlay('${key}')">Let’s play</button></div>
     </div>
   </section>`);
   speak(`${s.title}. Choose learn, quiz, or play.`, {quiet:true});
@@ -728,14 +630,14 @@ function lessonCards(list){
 }
 function renderLearn(key){
   setResume({page:'lesson', subject:key});
-  const special = {reading:readingLibrary, geo:renderGeographyLearn, science:renderScienceLearn, body:renderBodyLearn, rhymes:renderRhymes, art:renderArt, chess:renderChess, games:renderGamesHub, math:renderMathLearn, english:renderEnglishLearn};
+  const special = {reading:readingLibrary, geo:renderGeographyLearn, science:renderScienceLearn, body:renderBodyLearn, rhymes:renderRhymes, art:renderArt, chess:renderChess, games:renderGamesHub, math:renderMathLearn, english:renderEnglishLearn, general:renderGeneralLearn, logic:renderLogicLearn, school:renderSchoolLearn, alphabets:renderAlphabets};
   if (special[key]) return special[key]();
   const s = subj(key);
   show(`${crumbs(s.title, `openSubject('${key}')`)}
   <section class="panel"><div class="section-title"><h1>📘 Learn: ${esc(s.title)}</h1>${speakBtn(`Let’s learn ${s.title}! Tap a card to hear it.`)}</div>
     ${lessonCards(lessons[key] || [])}
-    <div class="row-buttons"><button class="btn gold" onclick="startQuiz('${key}')">📝 Ready for the quiz</button><button class="btn" onclick="startPlay('${key}')">🎮 Play a game</button></div>
-  </section>`);
+    <div class="row-buttons"><button class="btn gold" onclick="startQuiz('${key}')">📝 Ready for the quiz</button></div>
+  </section><section class="panel">${activityChips(key)}</section>`);
 }
 
 /* ---------- quiz engine ---------- */
@@ -745,27 +647,11 @@ function numChoices(ans){
   for (const d of shuffle([1, -1, 2, -2, 3])){ if (set.size >= 3) break; if (ans + d >= 0) set.add(ans + d); }
   return shuffle([...set]).map(String);
 }
-function makeQuiz(key){
-  if (key === 'math') return Array.from({length:5}, mathItem);
-  if (key === 'reading'){
-    const stories = shuffle(illustratedStories).slice(0, 3).map(x => ({q:x.q, choices:x.choices, a:x.a, explain:x.lines.join(' '), passage:x.lines.join(' '), scene:x.scene}));
-    const letters = [blendItem(), phonicsItem()];
-    return shuffle([...stories, ...letters]);
-  }
-  if (key === 'body'){
-    const ask = bodyParts.filter(x => x.id !== 'bones');
-    const bone = pick(BONES), boneQ = {q:'Which bone is glowing?', html:`<div class="svg-box skeleton-box" style="max-width:240px">${skeletonSVG(bone.id, false)}</div>`, choices:shuffle([bone.name, ...shuffle(BONES.filter(x => x.id !== bone.id)).slice(0, 2).map(x => x.name)]), a:bone.name, explain:bone.fact};
-    return shuffle(shuffle(ask).slice(0, 4).map((t, i) => i < 2
-      ? {q:'Which body part is glowing orange?', html:`<div class="svg-box" style="max-width:300px">${bodySVG(t.id)}</div>`, choices:shuffle([t.name, ...shuffle(ask.filter(x => x.id !== t.id)).slice(0, 2).map(x => x.name)]), a:t.name, explain:t.fact}
-      : {q:'Which body part? ' + blankFact(t.fact), say:'Which body part? ' + blankFact(t.fact).replace('___','blank'), choices:shuffle([t.name, ...shuffle(ask.filter(x => x.id !== t.id)).slice(0, 2).map(x => x.name)]), a:t.name, explain:t.fact}).concat([boneQ]));
-  }
-  return shuffle(quizBank[key] || []).slice(0, 5).map(q => ({...q, choices:shuffle(q.choices)}));
-}
 function renderQuiz(key){
-  if (key === 'geo') return renderGeographyQuiz();
   if (key === 'games') return renderGamesHub();
   setResume({page:'quiz', subject:key});
   currentQuiz = {subject:key, index:0, right:0, items:makeQuiz(key), results:[]};
+  if (!currentQuiz.items.length) return renderSubject(key);
   renderQuizCard();
 }
 function renderQuizCard(){
@@ -804,7 +690,7 @@ function answerQuiz(i, el){
 }
 function quizDone(){
   if (currentQuiz.onDone) return currentQuiz.onDone(currentQuiz);
-  const Q = currentQuiz, s = subj(Q.subject), n = Q.items.length, r = Q.right;
+  const Q = currentQuiz, s = subj(Q.subject), n = Q.items.length || 0, r = Math.min(n, Q.right || 0);
   const msg = r === n ? 'Perfect score!' : r >= n - 2 ? 'Great work!' : 'Good practice! Let’s try again.';
   const big = r === n ? '🏆' : r >= n - 2 ? '🌟' : '💪';
   show(`${crumbs(s.title, `openSubject('${Q.subject}')`)}
@@ -950,6 +836,7 @@ function renderEnglishLearn(){
   setResume({page:'lesson', subject:'english'});
   show(`${crumbs('English', "openSubject('english')")}
   <section class="panel"><div class="section-title"><h1>✏️ Learn: English</h1>${speakBtn('Let’s learn English! Tap a card to hear it.')}</div>${lessonCards(lessons.english)}</section>
+  <section class="panel">${activityChips('english')}</section>
   <section class="panel"><h2>✍️ Writing box</h2><p class="muted">Write one or two sentences about your favorite animal. Then press 🔊 to hear your writing.</p>
     <textarea id="journal" style="width:100%;min-height:150px;border:3px solid #e0d7f5;border-radius:20px;padding:14px;font-size:22px" placeholder="My favorite animal is…">${esc(saved.journal || '')}</textarea>
     <div class="row-buttons"><button class="btn primary" onclick="saveJournal()">💾 Save</button><button class="btn secondary" onclick="speak(document.getElementById('journal').value || 'Please write your sentence first.')">🔊 Read my writing</button><button class="btn" onclick="checkWriting()">✅ Check my sentence</button></div>
@@ -968,25 +855,13 @@ function checkWriting(){
 }
 
 /* ---------- science ---------- */
-function renderScienceLearn(tab = 'space'){
-  setResume({page:'lesson', subject:'science'});
-  show(`${crumbs('Science', "openSubject('science')")}
-  <section class="panel"><h1>🔬 Science explorer</h1>
-    <div class="tabs"><button class="tab ${tab === 'space' ? 'active' : ''}" onclick="renderScienceLearn('space')">🪐 Planets & space</button><button class="tab ${tab === 'nature' ? 'active' : ''}" onclick="renderScienceLearn('nature')">🌱 Animals & plants</button><button class="tab" onclick="openSubject('body')">🧍 Human body</button></div>
-    ${tab === 'space' ? `<div class="space-intro"><span style="font-size:48px">☀️</span><div><h2>Our solar system</h2><p>Eight planets travel around the Sun. Tap a planet to learn about it. (Pictures are not to scale.)</p></div></div>
-      <div class="row-buttons"><button class="btn primary" onclick="planetTour()">🚀 Take the planet tour</button></div>
-      <div class="grid planet-grid">${planets.map((p, i) => `<button class="planet-card" onclick="planetDetails(${i})">${planetPicture(p.name)}<strong>${i + 1}. ${p.name}</strong><small>${esc(p.fact)}</small></button>`).join('')}</div>
-      <div id="planetInfo" class="fact" aria-live="polite"><h2>Choose a planet!</h2></div>
-      <div class="grid lesson-grid"><div class="lesson-card"><span class="big-emoji">☀️</span><h3>The Sun</h3><p>A star that gives us light and heat.</p><div class="row-buttons">${speakBtn('The Sun is a star. It gives us light and heat.', 'Listen')}</div></div><div class="lesson-card"><span class="big-emoji">🌙</span><h3>The Moon</h3><p>Our Moon travels around Earth. Sometimes we see it in the daytime too.</p><div class="row-buttons">${speakBtn('The Moon travels around Earth. Sometimes we can see it in the daytime too.', 'Listen')}</div></div></div>`
-    : lessonCards(lessons.science)}
-  </section>`);
-}
-function planetDetails(i){ const p = planets[i]; document.getElementById('planetInfo').innerHTML = `<h2>${p.name}</h2><p>Planet number ${i + 1} from the Sun. ${esc(p.fact)}</p>`; document.querySelectorAll('.planet-card').forEach((c, j) => c.style.outline = j === i ? '4px solid #ffc23d' : ''); return speak(`Planet number ${i + 1}. ${p.name}. ${p.fact}`); }
+function planetDetails(i){ const p = planets[i], box = document.getElementById('planetInfo'); if (!box) return Promise.resolve(false); box.innerHTML = `<h2>${p.name}</h2><p>Planet number ${i + 1} from the Sun. ${esc(p.fact)}</p>`; document.querySelectorAll('.planet-card').forEach((c, j) => c.style.outline = j === i ? '4px solid #ffc23d' : ''); return speak(`Planet number ${i + 1}. ${p.name}. ${p.fact}`); }
 async function planetTour(){
   const t = speechToken + 1;
   for (let i = 0; i < planets.length; i++){
+    const card = document.querySelectorAll('.planet-card')[i]; if (!card) return;
+    card.scrollIntoView({block:'nearest', behavior:'smooth'});
     const ok = await planetDetails(i);
-    document.querySelectorAll('.planet-card')[i].scrollIntoView({block:'nearest', behavior:'smooth'});
     if (!ok || speechToken !== t) return;
   }
 }
@@ -1008,7 +883,8 @@ function renderBodyLearn(){
   </section>
   <section class="panel" id="skeleton"><div class="section-title"><h2>🦴 Skeleton explorer</h2><span class="pill">Tap a bone!</span></div>
     <p class="muted">Your skeleton is all the bones inside your body. Tap a bone on the picture or a name to learn about it.</p>${skeletonPanel()}</section>
-  <section class="panel"><h2>📖 Body facts</h2>${lessonCards(lessons.body)}</section>`);
+  <section class="panel"><h2>📖 Body facts</h2>${lessonCards(lessons.body)}</section>
+  <section class="panel">${activityChips('body')}</section>`);
 }
 function pickBodyPart(id){ activeBodyPart = id; const y = window.scrollY; renderBodyLearn(); window.scrollTo(0, y); const p = bodyParts.find(x => x.id === id); speak(p.name + '. ' + p.fact, {quiet:true}); }
 
@@ -1019,7 +895,7 @@ function renderRhymes(){
   <section class="panel"><div class="section-title"><h1>🎵 Nursery rhymes</h1><span class="pill">${EN_RHYMES.length} rhymes</span></div>
     <p class="muted">Tap <b>Listen</b> to hear the rhyme and follow the yellow line. Try <b>Echo</b>: the voice reads a line, then you say it back!</p>
     <div class="grid lesson-grid">${EN_RHYMES.map((r, i) => `<div class="rhyme-card" id="rhyme${i}"><span class="rhyme-emoji">${r.emoji}</span><h3>${esc(r.title)}</h3><div>${r.lines.map(l => `<span class="rhyme-line">${esc(l)}</span>`).join('')}</div><div class="row-buttons"><button class="btn small secondary" onclick="speakRhyme(${i})">🔊 Listen</button><button class="btn small" onclick="speakRhyme(${i}, true)">🗣️ Echo</button></div></div>`).join('')}</div>
-  </section>`);
+  </section><section class="panel">${activityChips('rhymes')}</section>`);
 }
 function speakRhyme(i, echo){
   const r = EN_RHYMES[i], card = document.getElementById('rhyme' + i);
@@ -1035,7 +911,7 @@ const ART_STAMPS = ['⭐','❤️','🌸','🦄','🦋','🌈','☀️','🐱'];
 function renderArt(){
   setResume({page:'lesson', subject:'art'});
   show(`${crumbs('Art', "openSubject('art')")}
-  <section class="panel"><div class="section-title"><h1>🎨 Art studio</h1>${speakBtn('Draw anything you like! Pick a color, a brush, or a stamp.')}</div>
+  <section class="panel"><div class="section-title"><h1>🎨 Art studio</h1>${speakBtn('Draw anything you like! Pick a color, a brush, or a stamp.')}</div>${artTabBar('draw')}
     <div class="tabs">${[['','✏️ Free draw'],['star','⭐ Trace a star'],['heart','❤️ Heart'],['house','🏠 House'],['sun','☀️ Sun'],['fish','🐟 Fish']].map(([k, l]) => `<button class="tab ${k === '' ? 'active' : ''}" data-guide="${k}" onclick="setGuide('${k}')">${l}</button>`).join('')}</div>
     <div class="art-layout">
       <div class="canvas-stack"><canvas id="guideCanvas" width="960" height="630"></canvas><canvas id="draw" width="960" height="630" aria-label="Drawing area"></canvas></div>
@@ -1047,7 +923,7 @@ function renderArt(){
         <div class="row-buttons" style="margin:0"><button class="btn small warn" onclick="clearCanvas()">🗑️ Clear</button><button class="btn small secondary" onclick="saveDrawing()">💾 Save picture</button></div>
       </div>
     </div>
-  </section>`);
+  </section><section class="panel">${activityChips('art')}</section>`);
   setupCanvas();
 }
 function artColor(c, el){ ART.color = c; if (ART.tool !== 'brush'){ ART.tool = 'brush'; document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === 'brush')); } document.querySelectorAll('.swatch').forEach(b => b.classList.remove('active')); el.classList.add('active'); Sfx.tap(); }
@@ -1142,7 +1018,10 @@ function renderChess(){
         <div class="row-buttons"><button class="btn small" onclick="CH.show=!CH.show;renderChess()">${CH.show ? '🙈 Hide' : '👀 Show'} moves</button><button class="btn small" onclick="CH.found=[];renderChess()">↺ Start over</button></div>
       </div>
     </div>
-  </section>`);
+  </section>
+  <section class="panel"><h2>♟️ The chess board at the start</h2><p class="muted">This is how the pieces stand when a game begins. Tap a piece to hear its name and how it moves. White always goes first!</p>
+    <div class="chess-wrap">${chessSetupBoard()}<div class="fact" id="setupInfo"><h3>Tap a piece!</h3><p>The queen starts on her own color.</p></div></div></section>
+  <section class="panel">${activityChips('chess')}</section>`);
 }
 function chessPick(k){ CH.piece = k; CH.found = []; CH.show = false; const y = window.scrollY; renderChess(); window.scrollTo(0, y); const P = PIECES[k]; speak(P.name + '. ' + P.rule, {quiet:true}); }
 function chessTap(i){
@@ -1243,11 +1122,17 @@ function loadMapMode(mode, game){
   document.querySelectorAll('.tabs .tab[data-mode]').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
   drawMapScreen();
 }
-function renderGeographyLearn(){
+const GEO_TABS = [['world','🌍 World'],['usStates','🇺🇸 USA states'],['bdDivisions','🇧🇩 Bangladesh divisions'],['bdDistricts','🇧🇩 Bangladesh districts']];
+function renderGeographyLearn(tab){
+  tab = tab || renderGeographyLearn.tab || 'world'; renderGeographyLearn.tab = tab;
   setResume({page:'lesson', subject:'geo'});
   show(`${crumbs('Geography', "openSubject('geo')")}
-  <section class="panel"><div class="section-title"><h1>🌍 Explore the map</h1>${speakBtn('Explore the map. Tap a place to hear its name.')}</div>${geoTabs(false)}<div id="mapArea"></div></section>`);
-  loadMapMode('usStates', false);
+  <section class="panel"><div class="section-title"><h1>🌍 Explore the map</h1>${speakBtn('Explore the map. Tap a place to hear about it.')}</div>
+    <div class="tabs">${GEO_TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'active' : ''}" onclick="renderGeographyLearn('${k}')">${l}</button>`).join('')}</div>
+    <div id="${tab === 'world' ? 'worldZone' : 'mapArea'}"></div></section>
+  <section class="panel"><h2>📖 Map words</h2>${lessonCards([['🌍','Continents','There are 7 continents: Asia, Africa, North America, South America, Europe, Australia and Antarctica.','There are seven continents. Asia, Africa, North America, South America, Europe, Australia, and Antarctica.'],['🌊','Oceans','The 5 oceans are the Pacific, Atlantic, Indian, Arctic and Southern.','The five oceans are the Pacific, Atlantic, Indian, Arctic, and Southern oceans.'],['⛰️','Mountains','A mountain is very tall land. Mount Everest is the tallest.','A mountain is very tall land. Mount Everest is the tallest mountain in the world.'],['🏝️','Islands','An island has water all around it.','An island is land with water all around it.'],['🏜️','Deserts','A desert is a very dry place. The Sahara is in Africa.','A desert is a very dry place. The Sahara desert is in Africa.'],['🧭','Directions','North, south, east and west. On most maps, north is up.','North, south, east, and west. On most maps, north is at the top.']])}</section>
+  <section class="panel">${activityChips('geo')}</section>`);
+  if (tab === 'world') renderWorld('worldZone'); else loadMapMode(tab, false);
 }
 function renderGeographyQuiz(){
   setResume({page:'quiz', subject:'geo'});
@@ -1256,15 +1141,6 @@ function renderGeographyQuiz(){
   loadMapMode('usStates', true);
 }
 
-/* ---------- Play: one mini game per subject ---------- */
-function renderPlay(key){
-  if (key === 'games') return renderGamesHub();
-  setResume({page:'play', subject:key});
-  const s = subj(key);
-  show(`${crumbs(s.title, `openSubject('${key}')`)}
-  <section class="panel"><div class="section-title"><h1>🎮 ${esc(playNames[key] || 'Play')}</h1><span class="pill" id="playScore">⭐ 0 this game</span></div><div id="playZone"></div></section>`);
-  playScore = 0; newPlay(key);
-}
 let playScore = 0;
 function playWin(k, el){
   playScore++; const p = document.getElementById('playScore'); if (p) p.textContent = `⭐ ${playScore} this game`;
@@ -1345,7 +1221,8 @@ function renderGamesHub(){
     <div class="mode-grid">
       <div class="mode-card play"><div class="bigicon">⭕❌</div><h3>Tic-Tac-Toe</h3><p>Get three in a row! Play the Unicorn Bot or a friend.</p><button class="btn primary" onclick="renderTicTacToe()">Play Tic-Tac-Toe</button></div>
       <div class="mode-card learn"><div class="bigicon">🃏</div><h3>Memory match</h3><p>Flip the cards and find the pairs.</p><button class="btn primary" onclick="renderMemory()">Play Memory</button></div>
-      <div class="mode-card quiz"><div class="bigicon">♟️</div><h3>Chess moves</h3><p>Learn how each chess piece moves.</p><button class="btn gold" onclick="startLearn('chess')">Open Chess</button></div>
+      <div class="mode-card quiz"><div class="bigicon">🌈</div><h3>Color memory</h3><p>Watch the colors flash, then copy them!</p><button class="btn primary" onclick="renderSimon()">Play Color memory</button></div>
+      <div class="mode-card learn"><div class="bigicon">♟️</div><h3>Chess moves</h3><p>Learn how each chess piece moves.</p><button class="btn gold" onclick="startLearn('chess')">Open Chess</button></div>
     </div>
   </section>`);
   speak('Games! Pick tic-tac-toe or memory match.', {quiet:true});
@@ -1479,7 +1356,7 @@ function memFlip(i, el){
   if (MEM.cards[a] === MEM.cards[b]){
     setTimeout(() => { ea.classList.add('matched'); eb.classList.add('matched'); Sfx.good(); }, 250);
     MEM.matched++;
-    if (MEM.matched === MEM.size){ setTimeout(() => { recordResult('games', true, document.getElementById('memGrid')); confetti(); Sfx.win(); speak(`You found all the pairs in ${MEM.moves} moves! Great memory!`, {quiet:true}); document.getElementById('memInfo').textContent = `🎉 Done in ${MEM.moves} moves!`; }, 500); }
+    if (MEM.matched === MEM.size){ setTimeout(() => { if (!document.getElementById('memGrid')) return; recordResult('games', true, document.getElementById('memGrid')); confetti(); Sfx.win(); speak(`You found all the pairs in ${MEM.moves} moves! Great memory!`, {quiet:true}); const mi = document.getElementById('memInfo'); if (mi) mi.textContent = `🎉 Done in ${MEM.moves} moves!`; }, 500); }
   } else {
     MEM.lock = true;
     setTimeout(() => { ea.classList.remove('open'); eb.classList.remove('open'); MEM.lock = false; }, 900);
@@ -1791,15 +1668,15 @@ function tileSay(i){ const p = BL.word[0][i]; tileGlow(i); speak(soundSay(p), {q
 function slowBlend(){ const ps = BL.word[0]; speak(ps.map(soundSay), {gap:550, rate:.75, onPart: i => tileGlow(i)}); }
 function fastBlend(){ const ps = BL.word[0]; speak(ps.map(p => soundOf(p)).join(' '), {rate:1.05, onPart: i => document.querySelectorAll('#tiles .tile').forEach(t => t.classList.toggle('on', i === 0))}); }
 function blendWin(how, el){
-  const word = BL.word[0].join(''), fb = document.getElementById('playFeedback');
-  document.getElementById('blendPic').textContent = BL.word[1];
+  const word = BL.word[0].join(''), fb = document.getElementById('playFeedback') || document.createElement('p');
+  const bp = document.getElementById('blendPic'); if (!bp) return; bp.textContent = BL.word[1];
   document.querySelectorAll('#tiles .tile').forEach(t => t.classList.add('done'));
   const z = document.getElementById('blendMic'); if (z) z.innerHTML = `<div class="mic-ok">✅ ${how === 'mic' ? 'I heard you say' : 'The word is'} <b>${esc(word)}</b>!</div>`;
   recordResult('reading', true, el || document.getElementById('tiles'));
   saved.blendCount = (saved.blendCount || 0) + 1; saveAll();
   const c = pick(cheers); fb.className = 'feedback good'; fb.textContent = `🌟 ${c} ${BL.word[0].join(' - ')} makes ${word}!`;
   speak([`${c}`, `${BL.word[0].map(soundOf).join(', ')}.`, `${word}!`], {quiet:true, gap:300});
-  document.getElementById('blendNext').classList.add('primary');
+  const bn = document.getElementById('blendNext'); if (bn) bn.classList.add('primary');
 }
 
 /* Word families: change the first letter to make new words */
@@ -1843,10 +1720,10 @@ function tabSight(){
     <details style="margin-top:10px"><summary class="tiny">See all ${L.words.length} words</summary><div class="word-cloud">${L.words.map(x => `<span class="${saved.sightKnown[x] ? 'known' : ''}">${esc(x)}</span>`).join('')}</div></details>`);
   const win = how => {
     saved.sightKnown[w] = (saved.sightKnown[w] || 0) + 1; recordResult('reading', true, document.getElementById('flash'));
-    document.getElementById('flash').classList.add('known');
+    const fl = document.getElementById('flash'); if (!fl) return; fl.classList.add('known');
     const z = document.getElementById('sightMic'); if (z) z.innerHTML = `<div class="mic-ok">✅ ${how === 'mic' ? 'I heard' : 'Yes,'} “${esc(w)}”!</div>`;
-    const fb = document.getElementById('playFeedback'); fb.className = 'feedback good'; fb.textContent = '🌟 ' + pick(cheers);
-    speak(pick(cheers), {quiet:true}); document.getElementById('sightNext').classList.add('primary');
+    const fb = document.getElementById('playFeedback'); if (fb){ fb.className = 'feedback good'; fb.textContent = '🌟 ' + pick(cheers); }
+    speak(pick(cheers), {quiet:true}); const sn = document.getElementById('sightNext'); if (sn) sn.classList.add('primary');
   };
   if (micOK) sayWordCheck('sightMic', w, win);
   else grownUpCheck(document.getElementById('sightMic'), () => win('check'), () => speak(w), 'One-letter word. Grown-up check');
@@ -1871,7 +1748,7 @@ async function aloudGo(){
   if (res !== null) aloudDone(res);
 }
 function aloudDone(score){
-  const fb = document.getElementById('playFeedback');
+  const fb = document.getElementById('playFeedback'); if (!fb) return;
   if (score >= .8){ fb.className = 'feedback good'; fb.textContent = '🌟 ' + pick(cheers) + ' You read the whole sentence!'; recordResult('reading', true, document.getElementById('readWords')); speak(pick(cheers) + ' Great reading!', {quiet:true}); document.getElementById('aloudNext').classList.add('primary'); }
   else { fb.className = 'feedback bad'; fb.textContent = '💜 Good try! Tap the orange words to hear them, then try again.'; speak('Good try! Let’s practice the orange words.', {quiet:true}); }
 }
@@ -2223,8 +2100,8 @@ function make10(){
 }
 
 /* Richer quiz questions (used by the Math quiz and the daily routine) */
-function mathItem(){
-  const E = pick(OBJ), type = pick(['add','add','sub','count','compare','next','skip','oddeven','shape','pattern','bond','moreless']);
+function mathItem(forced){
+  const E = pick(OBJ), type = forced || pick(['add','add','sub','count','compare','next','skip','oddeven','shape','pattern','bond','moreless']);
   if (type === 'add'){ const a = rand(1, 6), b = rand(1, 4); return {q:`${a} + ${b} = ?`, visual:`${E.repeat(a)} ➕ ${E.repeat(b)}`, choices:numChoices(a + b), a:String(a + b), explain:`${a} plus ${b} equals ${a + b}.`}; }
   if (type === 'sub'){ const a = rand(3, 9), b = rand(1, a - 1); return {q:`${a} − ${b} = ?`, visual:E.repeat(a), say:`${a} take away ${b}. How many are left?`, choices:numChoices(a - b), a:String(a - b), explain:`${a} take away ${b} leaves ${a - b}.`}; }
   if (type === 'count'){ const n = rand(3, 12); return {q:'How many can you count?', visual:E.repeat(n), choices:numChoices(n), a:String(n), explain:`There are ${n}.`}; }
@@ -2238,16 +2115,968 @@ function mathItem(){
   const n = rand(1, 18); return {q:`What number comes after ${n}?`, choices:numChoices(n + 1), a:String(n + 1), explain:`After ${n} comes ${n + 1}.`};
 }
 
+/* ---------- Reusable activity engines: sort it, match it, put in order ---------- */
+const sw = c => `<span class="swatch-dot" style="background:${c}"></span>`;
+const flagImg = (iso2, w = 80) => `<img class="flag-img" src="https://flagcdn.com/w${w}/${iso2.toLowerCase()}.png" alt="flag" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${iso2.toUpperCase()}'}))">`;
+function engineDone(z, subject, msg){
+  recordResult(subject, true, z); confetti(22); Sfx.win();
+  const fb = z.querySelector('.e-fb'); if (fb){ fb.className = 'feedback good e-fb'; fb.textContent = '🏆 ' + msg; }
+  speak(msg, {quiet:true});
+  const again = z.querySelector('.e-again'); if (again) again.classList.add('primary');
+}
+/* SORT: one item at a time, tap the bin it belongs in */
+function sortGame(zoneId, subject, set){
+  const z = document.getElementById(zoneId); if (!z) return;
+  const items = shuffle(set.items).slice(0, set.n || 6); let i = 0, mistakes = 0;
+  z.innerHTML = `<div class="question">${speakBtn(set.say || set.title)}<h2>${esc(set.title)}</h2></div>
+    <div class="sort-item" id="${zoneId}Item"></div>
+    <div class="sort-bins">${set.bins.map((b, k) => `<button class="sort-bin" data-k="${k}"><span class="bin-head">${b[1]} ${esc(b[0])}</span><span class="bin-items"></span></button>`).join('')}</div>
+    <p class="feedback e-fb" aria-live="polite"></p><button class="btn e-again">🔁 Play again</button>`;
+  z.querySelector('.e-again').onclick = () => sortGame(zoneId, subject, set);
+  const showItem = () => { const it = items[i]; z.querySelector(`#${zoneId}Item`).innerHTML = it ? `<span class="si-emoji">${it[0]}</span><b>${esc(it[1])}</b>` : '🎉'; if (it) speak(it[1], {quiet:true, gap:0}); };
+  z.querySelectorAll('.sort-bin').forEach(b => b.onclick = () => {
+    const it = items[i]; if (!it) return;
+    if (+b.dataset.k === it[2]){
+      b.querySelector('.bin-items').insertAdjacentHTML('beforeend', `<span>${it[0]}</span>`); b.classList.add('ok'); setTimeout(() => b.classList.remove('ok'), 400); Sfx.pop(); i++;
+      if (i >= items.length) return engineDone(z, subject, mistakes ? 'All sorted! Great job!' : 'All sorted with no mistakes! Amazing!');
+      showItem();
+    } else { mistakes++; b.classList.add('no'); setTimeout(() => b.classList.remove('no'), 450); Sfx.bad(); const fb = z.querySelector('.e-fb'); fb.className = 'feedback bad e-fb'; fb.textContent = `Hmm, think again! Where does ${it[1]} go?`; speak(`Think again. Where does ${it[1]} go?`, {quiet:true}); }
+  });
+  const first = items[0]; z.querySelector(`#${zoneId}Item`).innerHTML = `<span class="si-emoji">${first[0]}</span><b>${esc(first[1])}</b>`;
+  if (voicePrefs.autoRead) speak([set.say || set.title, first[1]], {quiet:true});
+}
+/* MATCH: tap one card on the left, then its partner on the right */
+function matchGame(zoneId, subject, set){
+  const z = document.getElementById(zoneId); if (!z) return;
+  const pairs = shuffle(set.pairs).slice(0, set.n || 5);
+  const L = pairs.map((p, k) => ({k, html:p[0], say:p[2] || ''})), R = shuffle(pairs.map((p, k) => ({k, html:p[1], say:p[3] || ''})));
+  let sel = null, done = 0;
+  z.innerHTML = `<div class="question">${speakBtn(set.say || set.title)}<h2>${esc(set.title)}</h2></div>
+    <div class="match-cols"><div class="match-col">${L.map(x => `<button class="match-card" data-side="L" data-k="${x.k}">${x.html}</button>`).join('')}</div><div class="match-col">${R.map(x => `<button class="match-card" data-side="R" data-k="${x.k}">${x.html}</button>`).join('')}</div></div>
+    <p class="feedback e-fb" aria-live="polite"></p><button class="btn e-again">🔁 New cards</button>`;
+  z.querySelector('.e-again').onclick = () => matchGame(zoneId, subject, set);
+  const colors = ['#ffd6e7','#d9f0ff','#e3f8ec','#fff1c2','#ece2ff','#ffe1d3'];
+  z.querySelectorAll('.match-card').forEach(c => c.onclick = () => {
+    if (c.classList.contains('matched')) return;
+    const item = (c.dataset.side === 'L' ? L : R).find(x => x.k === +c.dataset.k); if (item.say) speak(item.say, {quiet:true, gap:0});
+    if (!sel || sel.dataset.side === c.dataset.side){ if (sel) sel.classList.remove('picked'); sel = c; c.classList.add('picked'); Sfx.tap(); return; }
+    if (sel.dataset.k === c.dataset.k){
+      const col = colors[done % colors.length]; [sel, c].forEach(x => { x.classList.remove('picked'); x.classList.add('matched'); x.style.background = col; }); done++; Sfx.good();
+      if (done === pairs.length) engineDone(z, subject, 'You matched them all!');
+    } else { const a = sel; a.classList.add('no'); c.classList.add('no'); setTimeout(() => { a.classList.remove('no', 'picked'); c.classList.remove('no'); }, 450); Sfx.bad(); }
+    sel = null;
+  });
+  if (voicePrefs.autoRead) speak(set.say || set.title, {quiet:true});
+}
+/* ORDER: tap the tiles in the right order */
+function orderGame(zoneId, subject, set){
+  const z = document.getElementById(zoneId); if (!z) return;
+  const seq = typeof set.items === 'function' ? set.items() : set.items; let next = 0;
+  z.innerHTML = `<div class="question">${speakBtn(set.say || set.title)}<h2>${esc(set.title)}</h2></div>
+    <div class="order-line">${seq.map((_, i) => `<span class="order-slot">${i + 1}</span>`).join('')}</div>
+    <div class="order-tiles">${shuffle(seq.map((s, i) => ({s, i}))).map(x => `<button class="order-tile" data-i="${x.i}">${x.s[0]}</button>`).join('')}</div>
+    <p class="feedback e-fb" aria-live="polite"></p><button class="btn e-again">🔁 Play again</button>`;
+  z.querySelector('.e-again').onclick = () => orderGame(zoneId, subject, set);
+  const slots = z.querySelectorAll('.order-slot');
+  z.querySelectorAll('.order-tile').forEach(t => t.onclick = () => {
+    const i = +t.dataset.i;
+    if (i === next){ slots[next].innerHTML = seq[i][0]; slots[next].classList.add('filled'); t.classList.add('used'); t.disabled = true; Sfx.pop(); speak(seq[i][1] || '', {quiet:true, gap:0}); next++;
+      if (next === seq.length) engineDone(z, subject, set.done || 'Perfect order!'); }
+    else { t.classList.add('no'); setTimeout(() => t.classList.remove('no'), 450); Sfx.bad(); const fb = z.querySelector('.e-fb'); fb.className = 'feedback bad e-fb'; fb.textContent = next ? 'Not yet! What comes next?' : 'Not yet! What comes first?'; }
+  });
+  if (voicePrefs.autoRead) speak(set.say || set.title, {quiet:true});
+}
+
+/* ---------- activity data ---------- */
+const SORTS = {
+  living:{title:'Living or not living?', say:'Is it living or not living? Living things grow, eat and breathe.', bins:[['Living','🌱'],['Not living','🪨']], items:[['🐶','dog',0],['🌳','tree',0],['🐟','fish',0],['🌻','flower',0],['🐦','bird',0],['🧒','child',0],['🍄','mushroom',0],['🪨','rock',1],['🚗','car',1],['⚽','ball',1],['🪑','chair',1],['📱','phone',1],['🧸','teddy bear',1]]},
+  float:{title:'Float or sink?', say:'Will it float on the water, or sink to the bottom?', bins:[['Floats','🛟'],['Sinks','⚓']], items:[['🦆','rubber duck',0],['🍃','leaf',0],['🪵','wood',0],['🎈','balloon',0],['🧽','sponge',0],['🍎','apple',0],['🪨','rock',1],['🔑','key',1],['🪙','coin',1],['⚓','anchor',1],['🔩','metal bolt',1],['🧲','magnet',1]]},
+  habitats:{title:'Land, water or air?', say:'Where does this animal move around: on land, in water, or in the air?', bins:[['Land','🌳'],['Water','🌊'],['Air','☁️']], items:[['🦁','lion',0],['🐘','elephant',0],['🐇','rabbit',0],['🐍','snake',0],['🐬','dolphin',1],['🐙','octopus',1],['🦈','shark',1],['🐠','fish',1],['🦅','eagle',2],['🦋','butterfly',2],['🐝','bee',2],['🦜','parrot',2]], n:8},
+  healthy:{title:'Everyday food or sometimes treat?', say:'Is it an everyday food that helps you grow, or a sometimes treat?', bins:[['Everyday','🥦'],['Sometimes','🍭']], items:[['🍎','apple',0],['🥕','carrot',0],['🥦','broccoli',0],['🍌','banana',0],['🥛','milk',0],['🥚','egg',0],['🍚','rice',0],['🍭','lollipop',1],['🍩','donut',1],['🍟','fries',1],['🥤','soda',1],['🍬','candy',1],['🍰','cake',1]]},
+  fruitveg:{title:'Fruit or vegetable?', bins:[['Fruit','🍓'],['Vegetable','🥕']], items:[['🍎','apple',0],['🍌','banana',0],['🍇','grapes',0],['🍓','strawberry',0],['🍉','watermelon',0],['🍊','orange',0],['🥕','carrot',1],['🥦','broccoli',1],['🌽','corn',1],['🥔','potato',1],['🥒','cucumber',1],['🧅','onion',1]]},
+  clothes:{title:'Hot day or cold day?', say:'Would you wear it on a hot day or a cold day?', bins:[['Hot day','☀️'],['Cold day','❄️']], items:[['🩳','shorts',0],['🕶️','sunglasses',0],['👒','sun hat',0],['🩴','flip-flops',0],['👗','sundress',0],['🧤','gloves',1],['🧣','scarf',1],['🧥','coat',1],['🥾','boots',1],['🧦','warm socks',1]]},
+  warmcool:{title:'Warm color or cool color?', say:'Warm colors feel like fire and sun. Cool colors feel like water and grass.', bins:[['Warm','🔥'],['Cool','💧']], items:[[sw('#e53935'),'red',0],[sw('#fb8c00'),'orange',0],[sw('#fdd835'),'yellow',0],[sw('#ff6f91'),'pink',0],[sw('#1e88e5'),'blue',1],[sw('#43a047'),'green',1],[sw('#8e24aa'),'purple',1],[sw('#26c6da'),'turquoise',1]]},
+  nounverb:{title:'Naming word or action word?', say:'Is it a naming word, like dog, or an action word, like run?', bins:[['Naming word','🏷️'],['Action word','🏃']], items:[['🐶','dog',0],['⚽','ball',0],['🏠','house',0],['👩','mom',0],['🍎','apple',0],['🛏️','bed',0],['🏃','run',1],['🤸','jump',1],['🍽️','eat',1],['🎤','sing',1],['🏊','swim',1],['📖','read',1]]},
+  oddeven:{title:'Odd or even?', say:'Is the number odd or even?', bins:[['Odd','🙋'],['Even','👫']], items:Array.from({length:20}, (_, i) => [`<b class="big-digit">${i + 1}</b>`, String(i + 1), (i + 1) % 2 ? 0 : 1])},
+  vehicles:{title:'Road, water or sky?', say:'Where does it go: on the road, on water, or in the sky?', bins:[['Road','🛣️'],['Water','🌊'],['Sky','☁️']], items:[['🚗','car',0],['🚌','bus',0],['🚲','bike',0],['🚒','fire truck',0],['⛵','sailboat',1],['🚤','speedboat',1],['🛳️','ship',1],['✈️','airplane',2],['🚁','helicopter',2],['🎈','hot air balloon',2]], n:8},
+  corners:{title:'Corners or no corners?', bins:[['Has corners','📐'],['No corners','⚪']], items:[]}
+};
+SORTS.corners.items = [['circle',1],['oval',1],['triangle',0],['square',0],['rectangle',0],['hexagon',0],['star',0],['pentagon',0]].map(([n, b], i) => [shapeSVG(n, SHAPE_COLORS[i % SHAPE_COLORS.length], 70), n, b]);
+const MATCHES = {
+  babies:{title:'Match each animal to its baby', pairs:[['🐱 cat','kitten'],['🐶 dog','puppy'],['🐄 cow','calf'],['🐑 sheep','lamb'],['🐴 horse','foal'],['🐸 frog','tadpole'],['🦆 duck','duckling'],['🐻 bear','cub'],['🐔 hen','chick 🐥'],['🦘 kangaroo','joey']].map(([a, b]) => [a, b, a.replace(/^\S+ /, ''), b.replace(/ \S+$/, '')])},
+  homes:{title:'Match each animal to its home', pairs:[['🐝 bee','hive'],['🐦 bird','nest 🪺'],['🐟 fish','water 🌊'],['🐻 bear','cave'],['🐜 ant','anthill'],['🕷️ spider','web 🕸️'],['🐰 rabbit','burrow'],['🐴 horse','stable'],['🐶 dog','kennel']].map(([a, b]) => [a, b, a.replace(/^\S+ /, ''), b.replace(/ \S+$/, '')])},
+  senses:{title:'Match the body part to the sense', pairs:[['👀 eyes','see'],['👂 ears','hear'],['👃 nose','smell'],['👅 tongue','taste'],['✋ skin','touch']].map(([a, b]) => [a, b, a.slice(3), b]), n:5},
+  opposites:{title:'Match the opposites', pairs:[['big','small'],['hot','cold'],['up','down'],['happy','sad'],['fast','slow'],['day','night'],['open','closed'],['wet','dry'],['tall','short'],['full','empty'],['loud','quiet']].map(([a, b]) => [a, b, a, b])},
+  plurals:{title:'Match one to many', pairs:[['cat','cats'],['box','boxes'],['mouse','mice'],['child','children'],['foot','feet'],['baby','babies'],['man','men'],['tooth','teeth']].map(([a, b]) => [`one ${a}`, `two ${b}`, `one ${a}`, `two ${b}`])},
+  rhymepairs:{title:'Match the rhyming words', pairs:[['cat','hat'],['sun','fun'],['star','car'],['cake','lake'],['bee','tree'],['frog','log'],['bug','rug'],['moon','spoon'],['fish','dish'],['king','ring']].map(([a, b]) => [a, b, a, b])},
+  jobs:{title:'Match the helper to their tool', pairs:[['🧑‍⚕️ doctor','🩺'],['🧑‍🍳 chef','🍳'],['🧑‍🚒 firefighter','🚒'],['🧑‍🌾 farmer','🚜'],['🧑‍🏫 teacher','📚'],['🧑‍✈️ pilot','✈️'],['🧑‍🎨 artist','🎨'],['👮 police officer','🚓'],['🧑‍🚀 astronaut','🚀']].map(([a, b]) => [a, `<span class="big-emo">${b}</span>`, a.replace(/^\S+ /, ''), ''])},
+  weather:{title:'Match the weather to what you need', pairs:[['☀️ sunny','🕶️ sunglasses'],['🌧️ rainy','☂️ umbrella'],['❄️ snowy','🧤 gloves'],['🌬️ windy','🪁 kite'],['🌊 beach day','🩱 swimsuit']].map(([a, b]) => [a, b, a.slice(3), b.slice(3)])},
+  colormix:{title:'Match the paint mix to the new color', pairs:[[`${sw('#e53935')}+${sw('#fdd835')}`,'orange'],[`${sw('#1e88e5')}+${sw('#fdd835')}`,'green'],[`${sw('#e53935')}+${sw('#1e88e5')}`,'purple'],[`${sw('#e53935')}+${sw('#ffffff')}`,'pink'],[`${sw('#222')}+${sw('#ffffff')}`,'gray']].map(([a, b]) => [a, b, '', b])},
+  chess:{title:'Match the chess piece to its name', pairs:[['♔','King'],['♕','Queen'],['♖','Rook'],['♗','Bishop'],['♘','Knight'],['♙','Pawn']].map(([a, b]) => [`<span class="big-emo">${a}</span>`, b, b, b])},
+  dots:{title:'Match the number to the dots', pairs:Array.from({length:10}, (_, i) => [`<b class="big-digit">${i + 1}</b>`, `<span class="dots">${'●'.repeat(i + 1)}</span>`, String(i + 1), ''])},
+  shapeobj:{title:'Match the shape to something real', pairs:[['circle','⚽'],['triangle','🍕'],['rectangle','🚪'],['octagon','🛑'],['hexagon','🐝'],['star','🌟'],['heart','❤️'],['oval','🥚']].map(([n, e], i) => [shapeSVG(n, SHAPE_COLORS[i % SHAPE_COLORS.length], 56), `<span class="big-emo">${e}</span>`, n, ''])},
+  letters:{title:'Match big letters to small letters', get pairs(){ return ALPHABET.map(([L]) => [`<b class="big-digit">${L}</b>`, `<b class="big-digit">${L.toLowerCase()}</b>`, L, L]); }}
+};
+const ORDERS = {
+  butterfly:{title:'Put the butterfly life cycle in order', items:[['🥚 Egg','egg'],['🐛 Caterpillar','caterpillar'],['🫛 Chrysalis','chrysalis'],['🦋 Butterfly','butterfly']], done:'Egg, caterpillar, chrysalis, butterfly!'},
+  plant:{title:'How does a plant grow? Put it in order', items:[['🌰 Seed','seed'],['🌱 Sprout','sprout'],['🪴 Plant','plant'],['🌻 Flower','flower']]},
+  chicken:{title:'Put the chicken life cycle in order', items:[['🥚 Egg','egg'],['🐣 Hatching','hatching'],['🐥 Chick','chick'],['🐔 Hen','hen']]},
+  planets:{title:'Put the planets in order from the Sun', items:() => planets.map(p => [`${planetPicture(p.name).replace('class="planet-picture"', 'class="planet-mini"')}<small>${p.name}</small>`, p.name])},
+  days:{title:'Put the days of the week in order', items:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => [d, d])},
+  seasons:{title:'Put the seasons in order', items:[['🌸 Spring','spring'],['☀️ Summer','summer'],['🍂 Fall','fall'],['❄️ Winter','winter']]},
+  months:{title:'Put these months in order', items:() => { const m = ['January','February','March','April','May','June','July','August','September','October','November','December'], s = rand(0, 7); return m.slice(s, s + 5).map(x => [x, x]); }},
+  numbers:{title:'Put the numbers in order, smallest first', items:() => shuffle(Array.from({length:20}, (_, i) => i + 1)).slice(0, 5).sort((a, b) => a - b).map(n => [`<b class="big-digit">${n}</b>`, String(n)])},
+  sizes:{title:'Put the animals in order, smallest to biggest', items:[['🐜','ant'],['🐭','mouse'],['🐱','cat'],['🐴','horse'],['🐘','elephant']].map(([e, n]) => [`<span class="big-emo">${e}</span>`, n])},
+  abc:{title:'Put the letters in ABC order', items:() => { const s = rand(0, 21); return ALPHABET.slice(s, s + 5).map(([L]) => [`<b class="big-digit">${L}</b>`, L]); }},
+  morning:{title:'Put the morning routine in order', items:[['😴 Wake up','wake up'],['🪥 Brush teeth','brush your teeth'],['👕 Get dressed','get dressed'],['🥣 Eat breakfast','eat breakfast'],['🎒 Go to school','go to school']]},
+  handwash:{title:'Put the hand-washing steps in order', items:[['💧 Wet hands','wet your hands'],['🧼 Add soap','add soap'],['👐 Scrub 20 seconds','scrub for 20 seconds'],['🚿 Rinse','rinse'],['🧻 Dry','dry your hands']]},
+  rainbow:{title:'Put the rainbow colors in order', items:[['red','#e53935'],['orange','#fb8c00'],['yellow','#fdd835'],['green','#43a047'],['blue','#1e88e5'],['purple','#8e24aa']].map(([n, c]) => [`${sw(c)}<small>${n}</small>`, n])},
+  story:{title:'Put the story in order', items:() => { const st = pick(illustratedStories); return st.lines.map(l => [`<span class="order-text">${esc(l)}</span>`, l]); }},
+  rhymelines:{title:'Put the rhyme lines in order', items:() => { const r = pick(EN_RHYMES.filter(x => x.lines.length <= 6)); return r.lines.slice(0, 4).map(l => [`<span class="order-text">${esc(l)}</span>`, l]); }}
+};
+/* Which activities each subject's Play page offers (classic = the original mini game) */
+const PLAY_SETS = {
+  reading:[['classic','🔤 Word builder'],['o:story','📖 Story order'],['m:letters','🔠 Big & small letters'],['m:rhymepairs','🎵 Rhyme match'],['o:abc','🔡 ABC order']],
+  math:[['classic','⭐ Count the stars'],['o:numbers','🔢 Number order'],['m:dots','⚫ Numbers & dots'],['s:oddeven','👫 Odd or even'],['m:shapeobj','🔷 Shapes around us']],
+  english:[['classic','✏️ Build a sentence'],['m:opposites','↔️ Opposites'],['m:plurals','🐞 One & many'],['s:nounverb','🏷️ Naming or action']],
+  science:[['classic','🪐 Planet challenge'],['m:babies','🐣 Animal babies'],['m:homes','🏠 Animal homes'],['s:living','🌱 Living or not'],['s:float','🛟 Float or sink'],['s:habitats','🌊 Land, water, air'],['o:butterfly','🦋 Butterfly cycle'],['o:plant','🌻 Plant growth'],['o:chicken','🐥 Chicken cycle'],['o:planets','☀️ Planet order']],
+  body:[['classic','🕵️ Body detective'],['m:senses','👀 Five senses'],['s:healthy','🥦 Healthy food'],['o:handwash','🧼 Wash your hands'],['o:morning','🌅 Morning routine']],
+  logic:[['classic','🔁 Finish the pattern'],['s:fruitveg','🍓 Fruit or vegetable'],['o:sizes','🐘 Small to big'],['s:corners','📐 Corners or not'],['s:vehicles','🚗 Road, water, sky']],
+  school:[['classic','🎯 Follow directions'],['o:abc','🔡 ABC order'],['o:numbers','🔢 Number order'],['m:shapeobj','🔷 Shapes around us'],['o:morning','🎒 Getting ready']],
+  general:[['classic','📅 Calendar game'],['o:days','📆 Days in order'],['o:seasons','🍂 Seasons in order'],['o:months','🗓️ Months in order'],['m:jobs','🧑‍🚒 Community helpers'],['m:weather','☂️ Weather gear'],['s:clothes','🧥 Hot or cold'],['s:vehicles','🚌 Vehicles']],
+  geo:[['classic','🏛️ State capitals'],['m:flags','🚩 Flags'],['m:continentAnimals','🦘 Continent animals'],['m:capitals','🌍 World capitals']],
+  rhymes:[['classic','🎵 Rhyme time'],['o:rhymelines','📜 Rhyme in order'],['m:rhymepairs','🤝 Rhyming pairs']],
+  art:[['classic','🎨 Color detective'],['m:colormix','🧪 Color mixing'],['s:warmcool','🔥 Warm or cool'],['o:rainbow','🌈 Rainbow order']],
+  chess:[['classic','♘ Knight jump'],['m:chess','♟️ Piece names']],
+  alphabets:[['classic','🔎 Find the letter'],['m:bnPics','🇧🇩 বাংলা pictures'],['m:arPics','🇸🇦 Arabic pictures'],['o:bnVowels','🔤 বাংলা vowels in order'],['o:arOrder','🔤 Arabic letters in order']]
+};
+function runActivity(zoneId, subject, id){
+  const [kind, name] = id.split(':');
+  if (kind === 's') return sortGame(zoneId, subject, SORTS[name]);
+  if (kind === 'm') return matchGame(zoneId, subject, MATCHES[name]);
+  if (kind === 'o') return orderGame(zoneId, subject, ORDERS[name]);
+}
+/* Play page: a menu of games for the subject */
+function renderPlay(key, gameId){
+  if (key === 'games') return renderGamesHub();
+  setResume({page:'play', subject:key});
+  const s = subj(key), list = PLAY_SETS[key] || [['classic', playNames[key] || 'Play']];
+  const cur = list.some(x => x[0] === gameId) ? gameId : (renderPlay.last && renderPlay.last[key] && list.some(x => x[0] === renderPlay.last[key]) ? renderPlay.last[key] : list[0][0]);
+  renderPlay.last = renderPlay.last || {}; renderPlay.last[key] = cur;
+  show(`${crumbs(s.title, `openSubject('${key}')`)}
+  <section class="panel"><div class="section-title"><h1>🎮 ${esc(s.title)} games</h1><span class="pill" id="playScore">⭐ 0 this game</span></div>
+    <div class="tabs game-tabs">${list.map(([id, label]) => `<button class="tab ${id === cur ? 'active' : ''}" onclick="renderPlay('${key}','${id}')">${label}</button>`).join('')}<button class="tab" onclick="renderPlay('${key}', pick(${JSON.stringify(list.map(x => x[0])).replace(/"/g, '&quot;')}.filter(x=>x!=='${cur}')))">🔀 Surprise me</button></div>
+    <div id="playZone"></div></section>`);
+  playScore = 0;
+  if (cur === 'classic') (key === 'alphabets' ? alphaFindPlay() : newPlay(key)); else runActivity('playZone', key, cur);
+}
+/* Activity chips used on Learn pages */
+function activityChips(key, ids){
+  const list = (PLAY_SETS[key] || []).filter(x => !ids || ids.includes(x[0]));
+  return `<div class="activity-strip"><b>🎮 Try an activity:</b> ${list.map(([id, label]) => `<button class="btn small" onclick="startPlay('${key}','${id}')">${label}</button>`).join('')}</div>`;
+}
+
+/* ---------- More content: question banks by topic, stories, rhymes, lessons ---------- */
+/* q(topic, question, answer, [wrong answers], explanation, spoken version) */
+const q = (t, qq, a, w, explain, say) => ({t, q:qq, a, choices:[a, ...w], explain, say});
+const QBANK = {
+  english:[
+    q('grammar','Which word is an action?','jump',['table','blue'],'Jump is something you can do.'),
+    q('grammar','Which word is a thing?','ball',['run','happy'],'A ball is a thing. It is a naming word.'),
+    q('grammar','Which word describes something?','fluffy',['eat','door'],'Fluffy is a describing word.'),
+    q('grammar','Which word is a place?','park',['sing','soft'],'A park is a place.'),
+    q('grammar','Which word is a person?','teacher',['chair','slowly'],'A teacher is a person.'),
+    q('punctuation','What goes at the end of a question?','?',['.','!'],'A question ends with a question mark.','What goes at the end of a question? A question mark, a period, or an exclamation mark?'),
+    q('punctuation','Which sentence is written correctly?','I like cats.',['i like cats.','i Like cats'],'A sentence starts with a capital letter and ends with a period.'),
+    q('punctuation','Which name is written correctly?','Ruhaimah',['ruhaimah','rUHAIMAH'],'Names start with a capital letter.'),
+    q('punctuation','Which one shows excitement?','We won!',['We won.','we won'],'An exclamation mark shows excitement!'),
+    q('punctuation','Which is a complete sentence?','The cat sleeps.',['cat the','sleeps'],'A sentence tells a whole idea.'),
+    q('vowels','Which letter is a vowel?','e',['b','t'],'E is a vowel. The vowels are a, e, i, o, u.'),
+    q('vowels','Which letter is NOT a vowel?','m',['a','o'],'M is not a vowel.'),
+    q('synonyms','Which word means the same as happy?','glad',['sad','slow'],'Happy and glad mean the same thing.'),
+    q('synonyms','Which word means the same as small?','little',['huge','loud'],'Small and little mean the same thing.'),
+    q('synonyms','Which word means the same as fast?','quick',['slow','tall'],'Fast and quick mean the same thing.'),
+    q('synonyms','Which word means the same as start?','begin',['stop','end'],'Start and begin mean the same thing.'),
+    q('spelling','Which word is spelled right?','cat',['kat','catt'],'C, a, t spells cat.'),
+    q('spelling','Which word is spelled right?','dog',['dawg','dogg'],'D, o, g spells dog.'),
+    q('spelling','Which word is spelled right?','fish',['fisch','fsh'],'F, i, s, h spells fish.'),
+    q('spelling','Which word is spelled right?','book',['buk','bok'],'B, o, o, k spells book.'),
+    q('spelling','Which word is spelled right?','tree',['trea','tre'],'T, r, e, e spells tree.')
+  ],
+  science:[
+    q('space','Which planet do we live on?','Earth',['Mars','Jupiter'],'We live on Earth.'),
+    q('space','Which one is a star?','the Sun',['the Moon','Earth'],'The Sun is a star.'),
+    q('space','Which planet has big rings?','Saturn',['Earth','Mars'],'Saturn is famous for its rings.'),
+    q('space','Which is the biggest planet?','Jupiter',['Mercury','Earth'],'Jupiter is the biggest planet.'),
+    q('space','Which planet is called the red planet?','Mars',['Venus','Neptune'],'Mars looks red.'),
+    q('space','What goes around the Earth?','the Moon',['the Sun','Jupiter'],'The Moon travels around Earth.'),
+    q('plants','What do plants need to grow?','sunlight and water',['shoes','television'],'Plants need sunlight and water.'),
+    q('plants','Which part of a plant drinks water from the soil?','roots',['petals','leaves'],'Roots drink water from the soil.'),
+    q('plants','What does a seed grow into?','a plant',['a rock','a bird'],'A seed grows into a plant.'),
+    q('animals','What does a caterpillar turn into?','a butterfly',['a frog','a bird'],'A caterpillar becomes a butterfly.'),
+    q('animals','Where does a fish live?','in water',['in a tree','in the sky'],'Fish live in water.'),
+    q('animals','Which animal has a long trunk?','elephant',['giraffe','zebra'],'An elephant has a long trunk.'),
+    q('animals','Which animal can fly?','bird',['dog','cow'],'Birds can fly.'),
+    q('animals','What does a cow give us?','milk',['eggs','honey'],'Cows give us milk.'),
+    q('animals','What do bees make?','honey',['milk','wool'],'Bees make honey.'),
+    q('animals','A baby dog is called a…','puppy',['kitten','calf'],'A baby dog is a puppy.'),
+    q('weather','What falls from clouds when it rains?','water drops',['sand','leaves'],'Rain is water falling from clouds.'),
+    q('weather','What do you see after rain when the sun shines?','a rainbow',['snow','stars'],'Sunlight and raindrops make a rainbow.'),
+    q('weather','What is snow?','frozen water',['hot sand','cotton'],'Snow is frozen water.'),
+    q('materials','What is ice?','frozen water',['hot sand','a cloud'],'Ice is frozen water.'),
+    q('materials','What does a magnet pull?','paper clips',['paper','wood'],'Magnets pull things made of iron, like paper clips.'),
+    q('materials','Which one floats on water?','a rubber duck',['a rock','a key'],'A rubber duck floats.'),
+    q('dinosaurs','Are there dinosaurs alive today?','No, they lived long ago',['Yes, in the park','Yes, at school'],'Dinosaurs lived a very long time ago. Birds are their relatives!'),
+    q('dinosaurs','How do we learn about dinosaurs?','from fossils',['from TV','from cookies'],'Fossils are bones and footprints left in rocks.'),
+    q('dinosaurs','Which dinosaur had three horns?','Triceratops',['T. rex','Stegosaurus'],'Tri means three. Triceratops had three horns.')
+  ],
+  body:[
+    q('senses','What do you use to smell?','nose',['ears','feet'],'You smell with your nose.'),
+    q('senses','What do you use to hear?','ears',['eyes','knees'],'You hear with your ears.'),
+    q('senses','What do you use to taste?','tongue',['elbow','hair'],'Your tongue tastes food.'),
+    q('senses','How many senses do we have?','5',['3','10'],'We have five senses: see, hear, smell, taste and touch.'),
+    q('organs','Which part helps you think?','brain',['knee','foot'],'Your brain helps you think.'),
+    q('organs','Which part pumps blood?','heart',['stomach','ear'],'Your heart pumps blood.'),
+    q('organs','Which part helps you breathe?','lungs',['toes','hair'],'Your lungs help you breathe.'),
+    q('bones','What is a skeleton made of?','bones',['water','clouds'],'A skeleton is made of bones.'),
+    q('bones','Which bone protects your brain?','skull',['ribs','kneecap'],'Your skull protects your brain.'),
+    q('bones','What protects your heart and lungs?','ribs',['toes','hair'],'Your ribs protect your heart and lungs.'),
+    q('health','How long should you wash your hands?','20 seconds',['1 second','1 hour'],'Wash for about 20 seconds.'),
+    q('health','Which drink is best for your body?','water',['soda','syrup'],'Water is the best drink.'),
+    q('health','How often should you brush your teeth?','two times a day',['once a year','never'],'Brush in the morning and before bed.'),
+    q('health','Which is a healthy snack?','an apple',['candy','chips'],'An apple is a healthy snack.'),
+    q('health','What helps your body grow and rest?','sleep',['screens','sugar'],'Sleep helps you grow and feel good.'),
+    q('parts','How many fingers are on one hand?','5',['4','10'],'One hand has five fingers.'),
+    q('parts','What do you use to walk?','legs and feet',['ears','nose'],'Legs and feet help you walk.')
+  ],
+  logic:[
+    q('patterns','What comes next? 🔴 🔵 🔴 🔵 🔴 ❓','🔵',['🔴','🟢'],'The pattern repeats red, blue.','Red, blue, red, blue, red. What comes next?'),
+    q('patterns','What comes next? ⭐ ⭐ 🌙 ⭐ ⭐ 🌙 ⭐ ❓','⭐',['🌙','☀️'],'Star, star, moon. So after one star comes another star.','Star, star, moon, star, star, moon, star. What comes next?'),
+    q('patterns','What comes next? 2, 4, 6, …','8',['7','10'],'We count by twos: 2, 4, 6, 8.','Two, four, six. What comes next?'),
+    q('oddone','Which is the odd one out? 🍎 🍌 🚗 🍇','🚗',['🍎','🍇'],'The car is not a fruit.','Apple, banana, car, grapes. Which is the odd one out?'),
+    q('oddone','Which is the odd one out? 🐶 🐱 🐰 🌳','🌳',['🐱','🐰'],'The tree is not an animal.','Dog, cat, rabbit, tree. Which is the odd one out?'),
+    q('oddone','Which is the odd one out? ✈️ 🚁 🚗 🦅','🚗',['✈️','🦅'],'The car cannot fly.','Airplane, helicopter, car, eagle. Which one cannot fly?'),
+    q('size','Which number is the biggest?','9',['4','2'],'Nine is the biggest.'),
+    q('size','Which number is the smallest?','3',['7','5'],'Three is the smallest.'),
+    q('size','Which animal is the biggest?','🐘',['🐭','🐱'],'The elephant is the biggest.','Which animal is the biggest? Elephant, mouse, or cat?'),
+    q('sorting','Which one is a fruit?','🍓',['🥕','🍞'],'A strawberry is a fruit.','Which one is a fruit? Strawberry, carrot, or bread?'),
+    q('sorting','Which one belongs in the kitchen?','🍳',['🛏️','🚿'],'A frying pan belongs in the kitchen.','Which one belongs in the kitchen? Frying pan, bed, or shower?'),
+    q('sorting','Which one do you wear on your feet?','👟',['🧢','🧤'],'Shoes go on your feet.','Which one do you wear on your feet? Shoes, cap, or gloves?'),
+    q('riddles','I have four legs and say “moo”. What am I?','cow',['cat','duck'],'A cow says moo!'),
+    q('riddles','I am yellow, I shine in the sky, and I keep you warm. What am I?','the Sun',['the Moon','a banana'],'The Sun shines and keeps us warm.'),
+    q('riddles','You can open me and read my pages. What am I?','a book',['a door','a box'],'Books have pages.'),
+    q('riddles','I have hands but I cannot clap. What am I?','a clock',['a robot','a tree'],'A clock has hands that point to the time.'),
+    q('riddles','I am full of holes but I can hold water. What am I?','a sponge',['a cup','a rock'],'A sponge has holes and soaks up water.'),
+    q('shapes','How many sides does a triangle have?','3',['4','5'],'A triangle has three sides.'),
+    q('shapes','Which shape has no corners?','circle',['square','triangle'],'A circle has no corners.')
+  ],
+  school:[
+    q('letters','Which letter comes after B?','C',['A','D'],'A, B, C. C comes after B.'),
+    q('letters','Which letter comes before F?','E',['G','D'],'E, F. E comes before F.'),
+    q('letters','Which word starts with the letter M?','moon',['sun','cat'],'Moon starts with M.'),
+    q('numbers','Which number comes after 7?','8',['6','9'],'Seven, eight. Eight comes after seven.'),
+    q('numbers','Which number comes before 10?','9',['11','8'],'Nine comes before ten.'),
+    q('shapes','Which shape is round?','circle',['square','triangle'],'A circle is round.'),
+    q('shapes','How many sides does a square have?','4',['3','5'],'A square has four sides.'),
+    q('colors','What color do you get when you mix red and yellow?','orange',['green','purple'],'Red and yellow make orange.'),
+    q('colors','What color is grass?','green',['purple','orange'],'Grass is green.'),
+    q('habits','What should you do before you answer?','listen carefully',['guess fast','close the screen'],'It is important to listen carefully.'),
+    q('habits','After you finish, you should…','check your work',['throw your pencil','skip everything'],'Checking helps you catch mistakes.'),
+    q('habits','What do you do if you need help in class?','raise your hand',['shout','hide'],'Raise your hand and ask.'),
+    q('money','Which coin is worth 1 cent?','penny',['dime','quarter'],'A penny is worth 1 cent.'),
+    q('money','Which coin is worth 10 cents?','dime',['penny','nickel'],'A dime is worth 10 cents.'),
+    q('money','Which coin is worth 25 cents?','quarter',['nickel','penny'],'A quarter is worth 25 cents.'),
+    q('money','Which coin is worth 5 cents?','nickel',['dime','quarter'],'A nickel is worth 5 cents.')
+  ],
+  general:[
+    q('calendar','How many seasons are there?','4',['2','8'],'There are four seasons: spring, summer, fall and winter.'),
+    q('calendar','How many days are in a week?','7',['5','10'],'There are seven days in a week.'),
+    q('calendar','How many months are in a year?','12',['7','10'],'There are twelve months in a year.'),
+    q('calendar','Which month comes first?','January',['June','December'],'January is the first month of the year.'),
+    q('calendar','Which season is the coldest?','winter',['summer','spring'],'Winter is the coldest season.'),
+    q('calendar','In which season do leaves fall from trees?','fall',['spring','summer'],'In fall, many leaves change color and fall.'),
+    q('weather','What do you use on a rainy day?','an umbrella',['sunglasses','a sled'],'An umbrella keeps you dry.'),
+    q('weather','What do you wear on a snowy day?','a warm coat',['shorts','flip-flops'],'A warm coat keeps you cozy.'),
+    q('helpers','Who helps us when we are sick?','a doctor',['a pilot','a baker'],'A doctor helps us when we are sick.'),
+    q('helpers','Who puts out fires?','a firefighter',['a chef','a farmer'],'Firefighters put out fires.'),
+    q('helpers','Who grows our food?','a farmer',['a dentist','a painter'],'Farmers grow food.'),
+    q('helpers','Who flies an airplane?','a pilot',['a teacher','a vet'],'A pilot flies the plane.'),
+    q('helpers','Who takes care of sick animals?','a vet',['a pilot','a baker'],'A vet is an animal doctor.'),
+    q('safety','In the USA, what number do you call in an emergency?','911',['123','000'],'Call 911 in an emergency in the USA.'),
+    q('safety','What do you do before crossing the street?','look both ways',['run fast','close your eyes'],'Stop, look left and right, then cross with a grown-up.'),
+    q('safety','What do you wear when riding a bike?','a helmet',['a crown','slippers'],'A helmet protects your head.'),
+    q('manners','What do you say when someone gives you something?','thank you',['go away','no'],'We say thank you.'),
+    q('manners','What do you say when you need something?','please',['hurry','give'],'Please is a magic word.'),
+    q('time','When do we usually see stars?','at night',['at lunch','in the morning'],'We see stars at night.'),
+    q('time','When do you eat breakfast?','in the morning',['at midnight','at bedtime'],'Breakfast is the morning meal.'),
+    q('vehicles','Which one can fly?','an airplane',['a car','a boat'],'An airplane flies in the sky.'),
+    q('vehicles','Which one goes on water?','a boat',['a bus','a bike'],'A boat goes on water.')
+  ],
+  rhymes:[
+    q('rhymes','Which rhyme is about a star?','Twinkle, Twinkle, Little Star',['Rain, Rain, Go Away','Humpty Dumpty'],'Twinkle, Twinkle is about a little star.'),
+    q('rhymes','Who sat on a wall?','Humpty Dumpty',['Jack','Miss Muffet'],'Humpty Dumpty sat on a wall.'),
+    q('rhymes','Where did Jack and Jill go?','up the hill',['to the beach','to school'],'Jack and Jill went up the hill.'),
+    q('rhymes','What ran up the clock?','a mouse',['a cat','a dog'],'The mouse ran up the clock.'),
+    q('rhymes','How many bags of wool did the black sheep have?','3',['2','5'],'Three bags full!'),
+    q('rhymes','What do you row in the song?','a boat',['a car','a bike'],'Row, row, row your boat.'),
+    q('rhymes','Who had a little lamb?','Mary',['Jill','Bo'],'Mary had a little lamb.'),
+    q('rhymes','In “Hey Diddle Diddle”, what jumped over the moon?','the cow',['the dog','the spoon'],'The cow jumped over the moon!'),
+    q('rhymes','Who frightened Miss Muffet?','a spider',['a mouse','a cat'],'A spider sat down beside her.')
+  ],
+  chess:[
+    q('pieces','Which piece moves in an L shape?','Knight ♘',['King ♔','Rook ♖'],'The knight moves in an L shape.'),
+    q('pieces','Which piece moves diagonally?','Bishop ♗',['Pawn ♙','Rook ♖'],'The bishop moves diagonally.'),
+    q('pieces','Which piece moves in straight lines?','Rook ♖',['Knight ♘','Bishop ♗'],'The rook moves in straight lines.'),
+    q('pieces','Which piece can move in every direction, many squares?','Queen ♕',['Pawn ♙','King ♔'],'The queen is the strongest piece.'),
+    q('pieces','How far does the king move?','one square',['two squares','across the board'],'The king moves one square at a time.'),
+    q('pieces','Which piece can jump over other pieces?','Knight ♘',['Rook ♖','Queen ♕'],'Only the knight can jump.'),
+    q('board','How many squares are on a chess board?','64',['20','100'],'A chess board has 64 squares, 8 by 8.'),
+    q('board','Which piece starts in the corner?','Rook ♖',['King ♔','Bishop ♗'],'The rooks start in the corners.'),
+    q('board','How many pawns does each player have?','8',['2','12'],'Each player has 8 pawns in a row.'),
+    q('rules','Which color moves first?','White',['Black','Red'],'White always moves first.'),
+    q('rules','What is it called when the king is trapped and the game ends?','checkmate',['checkers','goal'],'Checkmate ends the game!'),
+    q('rules','Which piece do you have to protect?','King ♔',['Pawn ♙','Rook ♖'],'Protect your king!')
+  ],
+  art:[
+    q('mixing','Red + yellow makes…','orange',['green','purple'],'Red and yellow make orange.','Red and yellow make what color?'),
+    q('mixing','Blue + yellow makes…','green',['orange','pink'],'Blue and yellow make green.','Blue and yellow make what color?'),
+    q('mixing','Red + blue makes…','purple',['yellow','brown'],'Red and blue make purple.','Red and blue make what color?'),
+    q('mixing','Red + white makes…','pink',['black','blue'],'Red and white make pink.','Red and white make what color?'),
+    q('colors','Which are the three primary colors?','red, yellow, blue',['pink, gray, green','black, white, brown'],'Red, yellow and blue are the primary colors.'),
+    q('colors','Which is a warm color?','orange',['blue','green'],'Orange feels warm, like the sun.'),
+    q('colors','What color is the sky on a sunny day?','blue',['green','black'],'The sky is blue on a sunny day.'),
+    q('tools','What do you paint with?','a brush',['a spoon','a shoe'],'We paint with a brush.'),
+    q('tools','What do you use to cut paper?','scissors',['a fork','a pillow'],'Scissors cut paper. Use them carefully!'),
+    q('music','Which instrument do you hit with sticks?','drum',['flute','violin'],'You hit a drum with sticks.'),
+    q('music','Which instrument do you blow into?','flute',['drum','piano'],'You blow into a flute.'),
+    q('music','Which instrument has black and white keys?','piano',['guitar','trumpet'],'A piano has black and white keys.'),
+    q('shapes','How many sides does a triangle have?','3',['4','5'],'A triangle has three sides.')
+  ],
+  geo:[
+    q('world','How many continents are there?','7',['5','10'],'There are seven continents.'),
+    q('world','Which is the biggest ocean?','Pacific',['Atlantic','Indian'],'The Pacific Ocean is the biggest.'),
+    q('world','Which is the biggest continent?','Asia',['Europe','Australia'],'Asia is the biggest continent.'),
+    q('world','Which continent is the coldest?','Antarctica',['Africa','Asia'],'Antarctica is covered in ice.'),
+    q('world','Where do kangaroos live?','Australia',['Europe','Antarctica'],'Kangaroos live in Australia.'),
+    q('world','Where do penguins like emperor penguins live?','Antarctica',['Africa','Europe'],'Emperor penguins live in Antarctica.'),
+    q('land','What is a big hill with a pointy top called?','mountain',['river','lake'],'A mountain is very tall land.'),
+    q('land','What is land with water all around it?','island',['desert','forest'],'An island has water all around.'),
+    q('land','What is a very dry, sandy place?','desert',['ocean','rainforest'],'Deserts are dry and sandy.'),
+    q('land','What do we call water that flows to the sea?','river',['mountain','cave'],'A river flows to the sea.'),
+    q('usa','What is the capital of the USA?','Washington, D.C.',['New York','Texas'],'Washington, D.C. is the capital.'),
+    q('usa','How many states are in the USA?','50',['13','100'],'The USA has 50 states.'),
+    q('usa','What is the national bird of the USA?','bald eagle',['penguin','parrot'],'The bald eagle is the national bird.'),
+    q('bangladesh','What is the capital of Bangladesh?','Dhaka',['Sylhet','Khulna'],'Dhaka is the capital of Bangladesh.'),
+    q('bangladesh','What is the national animal of Bangladesh?','Royal Bengal tiger',['elephant','kangaroo'],'The Royal Bengal tiger lives in the Sundarbans.'),
+    q('bangladesh','What is the national flower of Bangladesh?','water lily (shapla)',['rose','tulip'],'The shapla, a water lily, is the national flower.'),
+    q('bangladesh','What is the national fruit of Bangladesh?','jackfruit',['apple','grapes'],'The jackfruit is the national fruit.'),
+    q('bangladesh','What colors are on the flag of Bangladesh?','green and red',['blue and white','black and yellow'],'Green with a red circle.'),
+    q('directions','Where does the Sun come up in the morning?','east',['west','under the bed'],'The Sun rises in the east.'),
+    q('directions','On a map, which way is usually up?','north',['south','down'],'North is usually at the top of a map.')
+  ]
+};
+
+/* Generated questions (fresh every time) */
+const GEN = {
+  english:[
+    ['opposites', () => { const p = pick(MATCHES.opposites.pairs), o = shuffle(MATCHES.opposites.pairs.filter(x => x !== p)).slice(0, 2).map(x => x[1]); return {q:`What is the opposite of ${p[0]}?`, choices:[p[1], ...o], a:p[1], explain:`${p[0]} and ${p[1]} are opposites.`}; }],
+    ['plurals', () => { const p = pick([['cat','cats','cates'],['box','boxes','boxs'],['mouse','mice','mouses'],['child','children','childs'],['foot','feet','foots'],['baby','babies','babys'],['bus','buses','busses'],['tooth','teeth','tooths']]); return {q:`One ${p[0]}, two…`, choices:[p[1], p[2], p[0]], a:p[1], explain:`One ${p[0]}, two ${p[1]}.`}; }],
+    ['rhyme', () => { const p = pick(MATCHES.rhymepairs.pairs), o = shuffle(['sock','pen','dog','cup','leg','bed','map','box'].filter(w => w !== p[1])).slice(0, 2); return {q:`Which word rhymes with ${p[0]}?`, choices:[p[1], ...o], a:p[1], explain:`${p[0]} and ${p[1]} rhyme.`}; }],
+    ['missing', () => { const w = pick(BLEND_WORDS.filter(x => x[0].length === 3 && x[0].every(g => g.length === 1))), word = w[0].join(''), v = w[0][1], others = shuffle('aeiou'.split('').filter(x => x !== v)).slice(0, 2); return {q:`${w[1]}  ${w[0][0]} _ ${w[0][2]}: which letter is missing?`, say:`Which letter is missing in ${word}?`, choices:[v, ...others], a:v, explain:`${word} is spelled ${w[0].join(', ')}.`}; }]
+  ],
+  science:[
+    ['planet order', () => { const i = rand(0, 7); return {q:`Which planet is number ${i + 1} from the Sun?`, choices:[planets[i].name, planets[(i + 2) % 8].name, planets[(i + 5) % 8].name], a:planets[i].name, explain:`The order is ${planets.map(p => p.name).join(', ')}.`}; }],
+    ['animal babies', () => { const p = pick(MATCHES.babies.pairs), o = shuffle(MATCHES.babies.pairs.filter(x => x !== p)).slice(0, 2).map(x => x[3]); return {q:`A baby ${p[2]} is called a…`, choices:[p[3], ...o], a:p[3], explain:`A baby ${p[2]} is a ${p[3]}.`}; }],
+    ['animal homes', () => { const p = pick(MATCHES.homes.pairs), o = shuffle(MATCHES.homes.pairs.filter(x => x !== p)).slice(0, 2).map(x => x[3]); return {q:`Where does a ${p[2]} live?`, choices:[p[3], ...o], a:p[3], explain:`A ${p[2]} lives in a ${p[3]}.`}; }],
+    ['living', () => { const it = pick(SORTS.living.items); return {q:`Is a ${it[1]} living or not living?`, visual:it[0], choices:['living', 'not living'], a:it[2] ? 'not living' : 'living', explain:it[2] ? `A ${it[1]} does not grow or eat.` : `A ${it[1]} is alive. It grows.`}; }]
+  ],
+  body:[
+    ['highlight', () => { const ask = bodyParts.filter(x => x.id !== 'bones'), t = pick(ask); return {q:'Which body part is glowing orange?', html:`<div class="svg-box" style="max-width:280px">${bodySVG(t.id)}</div>`, choices:[t.name, ...shuffle(ask.filter(x => x.id !== t.id)).slice(0, 2).map(x => x.name)], a:t.name, explain:t.fact}; }],
+    ['skeleton', () => { const b = pick(BONES); return {q:'Which bone is glowing?', html:`<div class="svg-box skeleton-box" style="max-width:220px">${skeletonSVG(b.id, false)}</div>`, choices:[b.name, ...shuffle(BONES.filter(x => x.id !== b.id)).slice(0, 2).map(x => x.name)], a:b.name, explain:b.fact}; }],
+    ['food', () => { const g = pick(SORTS.healthy.items.filter(x => x[2] === 0)), b = shuffle(SORTS.healthy.items.filter(x => x[2] === 1)).slice(0, 2); return {q:'Which is an everyday healthy food?', say:`Which is an everyday healthy food? ${[g, ...b].map(x => x[1]).join(', ')}?`, choices:[`${g[0]} ${g[1]}`, ...b.map(x => `${x[0]} ${x[1]}`)], a:`${g[0]} ${g[1]}`, explain:`${g[1]} helps your body grow strong.`}; }]
+  ],
+  logic:[
+    ['sequence', () => { const set = pick(PAT_SETS), u = pick(PAT_UNITS), seq = Array.from({length:u.length * 2 + 1}, (_, i) => set[u[i % u.length]]), ans = seq.pop(); return {q:'What comes next?', visual:seq.join(' ') + ' ❓', say:'Look at the pattern. What comes next?', choices:[...new Set([ans, ...set])], a:ans, explain:'The pattern repeats.'}; }],
+    ['sizes', () => { const s = ORDERS.sizes.items, i = rand(0, s.length - 2), j = rand(i + 1, s.length - 1); const big = Math.random() < .5; return {q:`Which is ${big ? 'bigger' : 'smaller'}?`, say:`Which is ${big ? 'bigger' : 'smaller'}, ${s[i][1]} or ${s[j][1]}?`, choices:[s[i][1], s[j][1]], a:big ? s[j][1] : s[i][1], explain:`A ${s[j][1]} is bigger than a ${s[i][1]}.`}; }]
+  ],
+  school:[
+    ['clock', () => { const h = rand(1, 12); return {q:'What time is it?', html:clockSVG(h, 0, 150), choices:[`${h} o’clock`, `${h % 12 + 1} o’clock`, `${(h + 5) % 12 + 1} o’clock`], a:`${h} o’clock`, explain:`The short hand points to ${h}. It is ${h} o’clock.`}; }],
+    ['abc', () => { const i = rand(0, 24), L = ALPHABET[i][0], n = ALPHABET[i + 1][0]; return {q:`Which letter comes after ${L}?`, choices:[n, ALPHABET[(i + 3) % 26][0], ALPHABET[(i + 20) % 26][0]], a:n, explain:`${L}, ${n}.`}; }]
+  ],
+  general:[
+    ['days', () => { const d = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'], i = rand(0, 6), after = Math.random() < .6; const a = after ? d[(i + 1) % 7] : d[(i + 6) % 7]; return {q:`Which day comes ${after ? 'after' : 'before'} ${d[i]}?`, choices:[...new Set([a, d[(i + 2) % 7], d[(i + 4) % 7]])], a, explain:`${after ? d[i] + ', ' + a : a + ', ' + d[i]}.`}; }],
+    ['months', () => { const m = ['January','February','March','April','May','June','July','August','September','October','November','December'], i = rand(0, 10); return {q:`Which month comes after ${m[i]}?`, choices:[m[i + 1], m[(i + 3) % 12], m[(i + 7) % 12]], a:m[i + 1], explain:`${m[i]}, then ${m[i + 1]}.`}; }],
+    ['clock', () => GEN.school[0][1]()],
+    ['jobs', () => { const p = pick(MATCHES.jobs.pairs), o = shuffle(MATCHES.jobs.pairs.filter(x => x !== p)).slice(0, 2).map(x => x[2]); return {q:'Who uses this?', html:`<div class="q-visual">${p[1]}</div>`, choices:[p[2], ...o], a:p[2], explain:`A ${p[2]} uses it.`}; }]
+  ],
+  rhymes:[
+    ['next line', () => { const r = pick(EN_RHYMES), i = rand(0, r.lines.length - 2), right = r.lines[i + 1].replace(/[,.;!]$/, ''); const wrong = shuffle(EN_RHYMES.filter(x => x !== r).flatMap(x => x.lines)).slice(0, 2).map(l => l.replace(/[,.;!]$/, '')); return {q:`“${r.lines[i]}” What comes next?`, choices:[right, ...wrong], a:right, explain:`In ${r.title}: ${r.lines[i]} ${r.lines[i + 1]}`}; }],
+    ['rhyming words', () => GEN.english[2][1]()]
+  ],
+  art:[
+    ['color quiz', () => { const x = pick([['red','#e53935'],['blue','#1e88e5'],['green','#43a047'],['yellow','#fdd835'],['purple','#8e24aa'],['orange','#fb8c00'],['pink','#ff6f91'],['brown','#8d5a3b']]); return {q:'What color is this?', html:`<div style="width:110px;height:110px;border-radius:26px;background:${x[1]};margin:10px 0"></div>`, choices:[x[0], ...shuffle(['red','blue','green','yellow','purple','orange','pink','brown'].filter(c => c !== x[0])).slice(0, 2)], a:x[0], explain:`That is ${x[0]}.`}; }],
+    ['shapes', () => { const names = Object.keys(SHAPES), t = pick(names); return {q:'What shape is this?', html:`<div style="margin:8px 0">${shapeSVG(t, pick(SHAPE_COLORS), 120)}</div>`, choices:[t, ...shuffle(names.filter(n => n !== t)).slice(0, 2)], a:t, explain:shapeFacts(t)}; }]
+  ],
+  geo:[
+    ['state capitals', () => { const x = pick(usaStates); return {q:`What is the capital of ${x[1]}?`, choices:[x[2], ...shuffle(usaStates.filter(y => y[2] !== x[2])).slice(0, 2).map(y => y[2])], a:x[2], explain:`The capital of ${x[1]} is ${x[2]}.`}; }]
+  ],
+  reading:[
+    ['story', () => { const x = pick(illustratedStories); return {q:x.q, choices:x.choices.slice(), a:x.a, explain:x.lines.join(' '), passage:x.lines.join(' '), scene:x.scene}; }],
+    ['blending', () => blendItem()],
+    ['phonics', () => phonicsItem()],
+    ['sight words', () => { const w = pick(SIGHT_LEVELS[0].words.filter(x => x.length > 1)), o = shuffle(SIGHT_LEVELS[0].words.filter(x => x !== w && x.length > 1)).slice(0, 2); return {q:'Listen. Which word did you hear?', say:`Which word is: ${w}?`, visual:'👂🔊', choices:[w, ...o], a:w, explain:`That word is ${w}.`}; }],
+    ['letters', () => { const L = pick(ALPHABET)[0], up = Math.random() < .5; return {q:up ? `Which is the small letter for ${L}?` : `Which is the big letter for ${L.toLowerCase()}?`, choices:shuffle([L, ...shuffle(ALPHABET.filter(x => x[0] !== L)).slice(0, 2).map(x => x[0])]).map(c => up ? c.toLowerCase() : c), a:up ? L.toLowerCase() : L, explain:`${L} and ${L.toLowerCase()} are the same letter.`}; }],
+    ['digraphs', () => { const d = pick(DIGRAPHS), others = shuffle(DIGRAPHS.filter(x => x !== d)).slice(0, 2); return {q:`Which word has the “${d[0]}” sound?`, choices:[`${d[1]} ${d[2]}`, ...others.map(o => `${o[1]} ${o[2]}`)], a:`${d[1]} ${d[2]}`, explain:`${d[2]} has the ${d[0]} sound.`}; }]
+  ],
+  math:Array.from(['add','sub','count','compare','next','skip','oddeven','shape','pattern','bond','moreless','clock'], t => [t, () => t === 'clock' ? GEN.school[0][1]() : mathItem(t)])
+};
+/* Build a 5-question quiz that mixes different topics of the subject */
+function makeQuiz(key){
+  const bank = (QBANK[key] || []).map(it => [it.t, () => ({...it, choices:it.choices.slice()})]);
+  const pool = [...bank, ...(GEN[key] || [])];
+  if (!pool.length) return [];
+  const byTopic = {}; pool.forEach(([t, f]) => (byTopic[t] = byTopic[t] || []).push(f));
+  const topics = shuffle(Object.keys(byTopic)), out = [], seenQ = new Set();
+  let guard = 0;
+  while (out.length < 5 && guard++ < 60){
+    const t = topics[out.length % topics.length] || pick(Object.keys(byTopic));
+    const item = pick(byTopic[t])();
+    if (!item || seenQ.has(item.q + item.a)) continue;
+    seenQ.add(item.q + item.a);
+    item.a = String(item.a); item.choices = shuffle([...new Set(item.choices.map(String))]);
+    if (!item.choices.includes(item.a)) item.choices[0] = item.a;
+    out.push(item);
+  }
+  return out;
+}
+
+/* ---------- clock ---------- */
+function clockSVG(h, m = 0, size = 180){
+  const ha = ((h % 12) + m / 60) * 30 - 90, ma = m * 6 - 90, R = Math.PI / 180;
+  const nums = Array.from({length:12}, (_, i) => { const a = ((i + 1) * 30 - 90) * R; return `<text x="${100 + 74 * Math.cos(a)}" y="${100 + 74 * Math.sin(a) + 7}" text-anchor="middle" font-size="20" font-weight="800" fill="#3b2a4a">${i + 1}</text>`; }).join('');
+  return `<svg viewBox="0 0 200 200" width="${size}" height="${size}" class="clock-svg" role="img" aria-label="Clock showing ${h} o'clock"><circle cx="100" cy="100" r="94" fill="#fff" stroke="#8b6cf0" stroke-width="8"/>${nums}
+    <line x1="100" y1="100" x2="${100 + 46 * Math.cos(ha * R)}" y2="${100 + 46 * Math.sin(ha * R)}" stroke="#ff6fae" stroke-width="9" stroke-linecap="round"/>
+    <line x1="100" y1="100" x2="${100 + 66 * Math.cos(ma * R)}" y2="${100 + 66 * Math.sin(ma * R)}" stroke="#4f79ff" stroke-width="5" stroke-linecap="round"/><circle cx="100" cy="100" r="7" fill="#3b2a4a"/></svg>`;
+}
+
+/* ---------- more stories (pictures made from emoji) ---------- */
+illustratedStories.push(
+  {title:'The Big Bus',emoji:'🚌',scene:{bg:'day', art:[['🏫',290,120,64],['🚌',170,175,96],['🧒',60,190,44],['👧',100,195,40]]},lines:['The big bus is red.','Kids get on the bus.','The bus goes to school.','Beep, beep!'],q:'Where does the bus go?',choices:['To school','To the moon','To the zoo'],a:'To school'},
+  {title:'Fish in the Sea',emoji:'🐟',scene:{bg:'sea', art:[['🐳',230,110,100],['🐟',90,150,54],['🫧',140,80,30],['🌿',40,215,50],['🐚',300,220,34]]},lines:['A little fish swims.','It sees a big whale.','The whale says hi.','They swim together.'],q:'What does the fish see?',choices:['A big whale','A cat','A bus'],a:'A big whale'},
+  {title:'Pip the Puppy',emoji:'🐶',scene:{bg:'beach', art:[['🐶',140,160,90],['🦴',255,205,50],['🏖️',290,90,60]]},lines:['Pip is a little puppy.','Pip digs in the sand.','Pip finds a bone.','Pip is so happy!'],q:'What does Pip find?',choices:['A bone','A hat','A cup'],a:'A bone'},
+  {title:'The Snowman',emoji:'⛄',scene:{bg:'snow', art:[['⛄',170,155,110],['❄️',60,60,36],['❄️',290,80,30],['🧒',290,190,50]]},lines:['It is a cold day.','We make a snowman.','He has a carrot nose.','The sun comes out. Drip, drip!'],q:'What is the snowman’s nose?',choices:['A carrot','A ball','A stick'],a:'A carrot'},
+  {title:'Bee and the Flower',emoji:'🐝',scene:{bg:'day', art:[['🌸',200,175,90],['🐝',100,95,60],['🍯',300,210,40]]},lines:['A bee flies to a flower.','The flower is pink.','The bee gets sweet nectar.','Buzz, buzz, back home!'],q:'What color is the flower?',choices:['Pink','Blue','Black'],a:'Pink'},
+  {title:'Night Sky',emoji:'🌙',scene:{bg:'night', art:[['🌙',260,70,70],['⭐',80,50,30],['⭐',160,90,24],['🏠',150,185,90],['🦉',290,175,46]]},lines:['The sun goes down.','The moon comes up.','Stars twinkle and shine.','Good night, sleep tight!'],q:'What comes up at night?',choices:['The moon','The sun','A rainbow'],a:'The moon'},
+  {title:'Ruhaimah’s Garden',emoji:'🍅',scene:{bg:'day', art:[['👧',80,170,80],['🍅',210,200,46],['🍅',255,195,40],['🐰',300,200,50],['🌻',180,130,60]]},lines:['Ruhaimah has a garden.','She grows red tomatoes.','A bunny hops by.','She shares with the bunny.'],q:'What does she grow?',choices:['Tomatoes','Cars','Shoes'],a:'Tomatoes'},
+  {title:'The Rainbow',emoji:'🌈',scene:{bg:'day', art:[['🌈',175,110,150],['☁️',60,60,50],['☁️',290,60,50],['🦆',120,210,40]]},lines:['The rain stops.','A rainbow comes out.','It has many colors.','Red, orange, yellow, green, blue, purple!'],q:'When does the rainbow come out?',choices:['After the rain','At midnight','Inside a box'],a:'After the rain'}
+);
+function emojiScene(sc, title){
+  const bgs = {day:['#dff3ff','#b9e5a9'], sea:['#7cc7ee','#4aa3d6'], beach:['#dff3ff','#f6dfa1'], snow:['#e8f0fb','#ffffff'], night:['#202957','#2f3b6e']};
+  const [sky, ground] = bgs[sc.bg] || bgs.day;
+  return `<svg class="story-art" viewBox="0 0 350 240" role="img" aria-label="Picture for ${esc(title || 'story')}"><rect width="350" height="240" fill="${sky}"/>${sc.bg === 'sea' ? '<path d="M0 40 Q45 30 90 40 T180 40 T270 40 T350 40" stroke="#bfe7fb" stroke-width="5" fill="none"/>' : sc.bg === 'night' ? '' : '<circle cx="302" cy="40" r="24" fill="#ffe39a"/>'}<path d="M0 190Q90 153 180 190T350 190V240H0Z" fill="${ground}"/>${sc.art.map(([e, x, y, s]) => `<text x="${x}" y="${y}" font-size="${s}" text-anchor="middle" dominant-baseline="middle">${e}</text>`).join('')}</svg>`;
+}
+
+/* ---------- more rhymes (traditional, public domain) ---------- */
+EN_RHYMES.push(
+  {title:'Mary Had a Little Lamb', emoji:'🐑', lines:['Mary had a little lamb,','Its fleece was white as snow;','And everywhere that Mary went','The lamb was sure to go.']},
+  {title:'Hey Diddle Diddle', emoji:'🐄', lines:['Hey diddle diddle,','The cat and the fiddle,','The cow jumped over the moon;','The little dog laughed','To see such sport,','And the dish ran away with the spoon.']},
+  {title:'Pat-a-Cake', emoji:'🎂', lines:['Pat-a-cake, pat-a-cake, baker’s man,','Bake me a cake as fast as you can;','Pat it and prick it and mark it with B,','And put it in the oven for baby and me.']}
+);
+
+/* ---------- more lesson cards ---------- */
+lessons.english.push(['🌈','Describing words','An adjective tells more: a red ball, a tiny bug, a happy girl.','A describing word tells more about something. A red ball. A tiny bug. A happy girl.'], ['👯','Same meaning','happy = glad\nsmall = little\nfast = quick','Some words mean the same thing. Happy and glad. Small and little. Fast and quick.'], ['🅰️','Capital letters','Use capitals for the start of a sentence, names, and the word I.','Use capital letters at the start of a sentence, for names, and for the word I.']);
+lessons.science.push(['🦖','Dinosaurs','Dinosaurs lived millions of years ago. We learn about them from fossils.','Dinosaurs lived millions of years ago. We learn about them from fossils, which are bones and footprints in rocks.'], ['🌈','Rainbows','Sunlight shining through raindrops makes a rainbow.','When sunlight shines through raindrops, it makes a rainbow.'], ['🌍','Day and night','Earth spins around. When our side faces the Sun, it is day.','Earth spins around and around. When our side faces the Sun it is day, and when it faces away it is night.'], ['🔊','Sound','Sounds are made when things shake, or vibrate.','Sounds are made when things shake. That shaking is called vibration.']);
+lessons.body.push(['🦷','Teeth','Kids have 20 baby teeth. Brush twice a day for 2 minutes!','Kids have twenty baby teeth. Brush them two times a day for two minutes.'], ['🍽️','Food groups','Fruits, vegetables, grains, protein and dairy help you grow.','Eat fruits, vegetables, grains, protein, and dairy to grow big and strong.'], ['💓','Feel your heart','Jump for 20 seconds, then put your hand on your chest. Feel it beat fast!','Jump for twenty seconds. Then put your hand on your chest and feel your heart beat fast!']);
+lessons.logic.push(['🤔','Riddles','A riddle is a puzzle question. Listen to the clues!','A riddle is a puzzle question. Listen carefully to the clues.'], ['🧩','Same and different','Look closely: what is the same? What is different?','Look closely. What is the same? What is different?']);
+lessons.school.push(['🪙','Coins','penny 1¢ · nickel 5¢ · dime 10¢ · quarter 25¢','A penny is one cent. A nickel is five cents. A dime is ten cents. A quarter is twenty-five cents.'], ['🕐','Telling time','The short hand shows the hour. The long hand shows the minutes.','On a clock, the short hand shows the hour, and the long hand shows the minutes.'], ['🤝','Being a good friend','Share, take turns, and use kind words.','A good friend shares, takes turns, and uses kind words.']);
+lessons.general.push(['🧑‍🚒','Community helpers','Doctors, firefighters, teachers and farmers help us every day.','Doctors, firefighters, teachers, and farmers help us every day.'], ['🚦','Staying safe','Look both ways, wear a helmet, and call 911 in an emergency.','Look both ways before crossing. Wear a helmet on a bike. In an emergency in the USA, call nine one one.'], ['🙏','Kind words','please · thank you · sorry · excuse me','Kind words are please, thank you, sorry, and excuse me.'], ['👪','Family','Families come in many shapes. They love and care for each other.','Families come in many shapes and sizes. They love and care for each other.']);
+const RIDDLES = QBANK.logic.filter(x => x.t === 'riddles');
+const DINOS = [['🦖','T. rex','A huge meat-eater with tiny arms and big teeth.'],['🦕','Brachiosaurus','A giant plant-eater with a very long neck, taller than a house!'],['🦏','Triceratops','A plant-eater with three horns and a bony frill.'],['🦎','Stegosaurus','A plant-eater with big plates on its back and a spiky tail.'],['🦅','Pteranodon','A flying reptile that lived with the dinosaurs.'],['🐦','Birds today','Birds are the living relatives of dinosaurs!']];
+
+/* ---------- Science explorer (tabs) ---------- */
+const SCI_TABS = [['space','🪐 Space'],['animals','🐾 Animals'],['plants','🌱 Plants & life cycles'],['weather','🌦️ Weather'],['dinos','🦖 Dinosaurs'],['experiments','🧪 Experiments']];
+function renderScienceLearn(tab){
+  tab = tab || renderScienceLearn.tab || 'space'; renderScienceLearn.tab = tab;
+  setResume({page:'lesson', subject:'science'});
+  const head = `${crumbs('Science', "openSubject('science')")}<section class="panel"><h1>🔬 Science explorer</h1>
+    <div class="tabs">${SCI_TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'active' : ''}" onclick="renderScienceLearn('${k}')">${l}</button>`).join('')}<button class="tab" onclick="startLearn('body')">🧍 Human body</button></div><div id="sciZone">`;
+  let body = '', after = null;
+  if (tab === 'space'){
+    body = `<div class="space-intro"><span style="font-size:48px">☀️</span><div><h2>Our solar system</h2><p>Eight planets travel around the Sun. Tap a planet to learn about it. (Pictures are not to scale.)</p></div></div>
+      <div class="row-buttons"><button class="btn primary" onclick="planetTour()">🚀 Take the planet tour</button><button class="btn" onclick="startPlay('science','o:planets')">☀️ Put planets in order</button></div>
+      <div class="grid planet-grid">${planets.map((p, i) => `<button class="planet-card" onclick="planetDetails(${i})">${planetPicture(p.name)}<strong>${i + 1}. ${p.name}</strong><small>${esc(p.fact)}</small></button>`).join('')}</div>
+      <div id="planetInfo" class="fact" aria-live="polite"><h2>Choose a planet!</h2></div>
+      ${lessonCards([['☀️','The Sun','A star that gives us light and heat.','The Sun is a star. It gives us light and heat.'],['🌙','The Moon','Our Moon travels around Earth. Sometimes we see it in the daytime too.','The Moon travels around Earth. Sometimes we can see it in the daytime too.'],['🌍','Day and night','Earth spins. When our side faces the Sun, it is day.','Earth spins around and around. When our side faces the Sun it is day, and when it faces away it is night.'],['👩‍🚀','Astronauts','Astronauts float in space because there is no gravity pulling them down to the floor.','Astronauts float inside their spaceship. They train for a long time to go to space.']])}`;
+  } else if (tab === 'animals'){
+    body = `${lessonCards(lessons.science.filter(x => ['Animals need','Animal homes'].includes(x[1])).concat([['🍼','Animal babies','A baby cat is a kitten. A baby cow is a calf. A baby kangaroo is a joey!','A baby cat is a kitten. A baby cow is a calf. A baby kangaroo is called a joey!'],['🥩','What animals eat','Some eat plants, some eat meat, and some eat both.','Some animals eat plants, some eat meat, and some eat both.'],['❄️','Staying warm','Polar bears have thick fur and fat to stay warm in the snow.','Polar bears have thick fur and fat to keep them warm in the snow.']]))}
+      <h2 style="margin-top:18px">🐣 Animal babies match</h2><div id="sciGame"></div>`;
+    after = () => matchGame('sciGame', 'science', MATCHES.babies);
+  } else if (tab === 'plants'){
+    body = `${lessonCards(lessons.science.filter(x => ['Plants need','Life cycle'].includes(x[1])).concat([['🌳','Parts of a plant','roots · stem · leaves · flower','A plant has roots, a stem, leaves, and a flower. Roots drink water. Leaves catch sunlight.'],['🐸','Frog life cycle','egg → tadpole → froglet → frog','A frog starts as an egg, then a tadpole, then a froglet, and finally a frog.']]))}
+      <h2 style="margin-top:18px">🦋 Life cycle puzzle</h2><div class="tabs"><button class="tab" onclick="orderGame('sciGame','science',ORDERS.butterfly)">🦋 Butterfly</button><button class="tab" onclick="orderGame('sciGame','science',ORDERS.plant)">🌻 Plant</button><button class="tab" onclick="orderGame('sciGame','science',ORDERS.chicken)">🐥 Chicken</button></div><div id="sciGame"></div>`;
+    after = () => orderGame('sciGame', 'science', ORDERS.butterfly);
+  } else if (tab === 'weather'){
+    body = `${lessonCards([['☀️','Sunny','The Sun shines and it feels warm.','On a sunny day the Sun shines and it feels warm.'],['🌧️','Rainy','Clouds drop water. Plants love the rain!','On a rainy day, clouds drop water. Plants love the rain!'],['❄️','Snowy','When it is very cold, rain freezes into snow.','When it is very cold, water freezes and falls as snow.'],['🌬️','Windy','Wind is moving air. It flies kites and spins windmills.','Wind is moving air. It can fly kites and spin windmills.'],['⛈️','Storms','Thunder is the loud sound that lightning makes. Stay inside!','Thunder is the loud sound that lightning makes. Stay inside during a storm.'],['🌈','Rainbows','Sunlight shining through raindrops makes a rainbow.','When sunlight shines through raindrops, it makes a rainbow.']])}
+      <h2 style="margin-top:18px">☂️ Dress for the weather</h2><div id="sciGame"></div>`;
+    after = () => matchGame('sciGame', 'science', MATCHES.weather);
+  } else if (tab === 'dinos'){
+    body = `<p class="muted">Dinosaurs lived millions of years ago, long before people. We learn about them from fossils.</p><div class="grid lesson-grid">${DINOS.map(([e, n, f]) => `<div class="lesson-card"><span class="big-emoji">${e}</span><h3>${n}</h3><p>${f}</p><div class="row-buttons">${speakBtn(`${n}. ${f}`, 'Listen')}</div></div>`).join('')}</div>`;
+  } else {
+    body = `${lessonCards(lessons.science.filter(x => ['Water changes','Magnets','Sound'].includes(x[1])))}
+      <h2 style="margin-top:18px">🧪 Try an experiment game</h2><div class="tabs"><button class="tab" onclick="sortGame('sciGame','science',SORTS.float)">🛟 Float or sink</button><button class="tab" onclick="sortGame('sciGame','science',SORTS.living)">🌱 Living or not</button><button class="tab" onclick="sortGame('sciGame','science',SORTS.habitats)">🌊 Land, water, air</button></div><div id="sciGame"></div>`;
+    after = () => sortGame('sciGame', 'science', SORTS.float);
+  }
+  show(head + body + `</div></section><section class="panel">${activityChips('science')}</section>`);
+  if (after) after();
+}
+
+/* ---------- General knowledge: calendar, clock, helpers ---------- */
+const CLK = {h:3};
+function renderGeneralLearn(){
+  setResume({page:'lesson', subject:'general'});
+  const now = new Date(), day = now.toLocaleDateString('en-US', {weekday:'long'}), date = now.toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+  const m = now.getMonth(), season = [2,3,4].includes(m) ? ['🌸','spring'] : [5,6,7].includes(m) ? ['☀️','summer'] : [8,9,10].includes(m) ? ['🍂','fall'] : ['❄️','winter'];
+  show(`${crumbs('General knowledge', "openSubject('general')")}
+  <section class="panel"><div class="section-title"><h1>💡 Learn: the world around us</h1>${speakBtn(`Today is ${day}, ${date}. It is ${season[1]}.`)}</div>
+    <div class="today-card"><div class="today-day">${day}</div><div>${date}</div><div class="today-season">${season[0]} It is ${season[1]} (in the north)</div></div>
+    ${lessonCards(lessons.general)}</section>
+  <section class="panel"><h2>🕐 Clock lab</h2><p class="muted">The short pink hand shows the hour. Tap the buttons to move it!</p>
+    <div class="body-wrap"><div id="clockBox" style="text-align:center"></div><div><div class="fact" style="text-align:center"><div class="big-number" id="clkDigital"></div><p id="clkWords" style="font-size:22px;font-weight:800"></p></div>
+      <div class="row-buttons"><button class="btn" onclick="clockSet(CLK.h-1)">⏪ 1 hour back</button><button class="btn primary" onclick="clockSet(CLK.h+1)">1 hour forward ⏩</button></div>
+      <h3 style="margin-top:14px">🎯 Clock challenge</h3><p id="clkGoal"></p><button class="btn gold" onclick="clockCheck()">✅ Check my clock</button><p class="feedback" id="clkFb"></p></div></div></section>
+  <section class="panel">${activityChips('general')}</section>`);
+  CLK.goal = rand(1, 12); clockSet(CLK.h, true);
+}
+function clockSet(h, quiet){
+  CLK.h = ((h - 1 + 12) % 12) + 1;
+  document.getElementById('clockBox').innerHTML = clockSVG(CLK.h, 0, 220);
+  document.getElementById('clkDigital').textContent = `${CLK.h}:00`;
+  document.getElementById('clkWords').textContent = `${CLK.h} o’clock`;
+  document.getElementById('clkGoal').innerHTML = `Make the clock show <b>${CLK.goal} o’clock</b>.`;
+  if (!quiet){ Sfx.tap(); speak(`${CLK.h} o'clock`, {quiet:true, gap:0}); }
+}
+function clockCheck(){
+  const fb = document.getElementById('clkFb');
+  if (CLK.h === CLK.goal){ fb.className = 'feedback good'; fb.textContent = `🌟 Yes! It is ${CLK.goal} o’clock.`; recordResult('general', true, fb); speak(`Yes! It is ${CLK.goal} o'clock!`, {quiet:true}); CLK.goal = rand(1, 12); setTimeout(() => clockSet(CLK.h, true), 1500); }
+  else { fb.className = 'feedback bad'; fb.textContent = `Not yet. The short hand should point to ${CLK.goal}.`; Sfx.bad(); speak(`Not yet. Move the short hand to ${CLK.goal}.`, {quiet:true}); }
+}
+
+/* ---------- Logic: riddles ---------- */
+function renderLogicLearn(){
+  setResume({page:'lesson', subject:'logic'});
+  show(`${crumbs('Logic & puzzles', "openSubject('logic')")}
+  <section class="panel"><div class="section-title"><h1>🧩 Learn: thinking skills</h1>${speakBtn('Let’s use our thinking brains!')}</div>${lessonCards(lessons.logic)}</section>
+  <section class="panel"><h2>🤔 Riddle time</h2><p class="muted">Listen to the riddle, think, then tap to see the answer!</p>
+    <div class="grid lesson-grid">${RIDDLES.map(r => `<div class="lesson-card riddle"><p style="font-size:20px;font-weight:800">${esc(r.q)}</p><div class="row-buttons">${speakBtn(r.q, 'Listen')}<button class="btn small gold" onclick="this.outerHTML='<b class=&quot;riddle-ans&quot;>${esc(r.a)}! 🎉</b>';speak(${esc(JSON.stringify(r.explain))},{quiet:true})">💡 Answer</button></div></div>`).join('')}</div></section>
+  <section class="panel"><h2>🔁 Pattern maker</h2><div id="logicGame"></div></section>
+  <section class="panel">${activityChips('logic')}</section>`);
+  orderGame('logicGame', 'logic', ORDERS.sizes);
+}
+
+/* ---------- School practice: coins and the clock ---------- */
+const COINS = [['penny','1¢','#c97b4a',1],['nickel','5¢','#b9bcc2',5],['dime','10¢','#d6d9de',10],['quarter','25¢','#c5c9cf',25]];
+function renderSchoolLearn(){
+  setResume({page:'lesson', subject:'school'});
+  show(`${crumbs('School practice', "openSubject('school')")}
+  <section class="panel"><div class="section-title"><h1>🎯 Learn: school skills</h1>${speakBtn('Let’s get ready for school!')}</div>${lessonCards(lessons.school)}</section>
+  <section class="panel"><h2>🪙 US coins</h2><p class="muted">Tap a coin to hear its name and value. A dime is small, but it is worth more than a nickel!</p>
+    <div class="coin-row">${COINS.map(([n, v, c, cents], i) => `<button class="coin" style="--c:${c};--s:${[58, 66, 54, 74][i]}px" onclick="speak('${n}. ${cents} ${cents === 1 ? 'cent' : 'cents'}.')"><span>${v}</span></button><b>${n}</b>`).join('')}</div>
+    <h3 style="margin-top:14px">🛒 Coin shop</h3><div id="coinGame"></div></section>
+  <section class="panel">${activityChips('school')}</section>`);
+  coinGame();
+}
+function coinGame(){
+  const z = document.getElementById('coinGame'); if (!z) return;
+  const item = pick([['🍎', 'apple'], ['🍪', 'cookie'], ['✏️', 'pencil'], ['🎈', 'balloon'], ['🍬', 'candy']]), price = pick([2, 3, 5, 6, 7, 10, 11, 15]); let total = 0;
+  z.innerHTML = `<p style="font-size:20px">The ${item[1]} ${item[0]} costs <b>${price}¢</b>. Tap pennies and nickels to pay exactly!</p>
+    <div class="row-buttons"><button class="btn" id="addP">+ penny 1¢</button><button class="btn" id="addN">+ nickel 5¢</button><button class="btn warn" id="clr">Start over</button></div>
+    <p class="big-number" style="font-size:42px" id="coinTotal">0¢</p><p class="feedback m-fb"></p><button class="btn m-next" onclick="coinGame()">New item →</button>`;
+  const upd = v => { total += v; Sfx.pop(); z.querySelector('#coinTotal').textContent = total + '¢';
+    if (total === price){ mathWin(z.querySelector('#coinTotal'), z, `You paid ${price} cents!`); recordResult('school', true); }
+    else if (total > price){ const fb = z.querySelector('.m-fb'); fb.className = 'feedback bad m-fb'; fb.textContent = 'Too much! Start over.'; speak('Oops, too much. Start over!', {quiet:true}); } };
+  z.querySelector('#addP').onclick = () => upd(1); z.querySelector('#addN').onclick = () => upd(5); z.querySelector('#clr').onclick = () => { total = 0; z.querySelector('#coinTotal').textContent = '0¢'; z.querySelector('.m-fb').textContent = ''; };
+  speak(`The ${item[1]} costs ${price} cents.`, {quiet:true});
+}
+
+/* ---------- Art: color lab & music ---------- */
+const PAINTS = [['red','#e53935'],['yellow','#fdd835'],['blue','#1e88e5'],['white','#ffffff'],['black','#222222']];
+const MIXES = {'red+yellow':['orange','#fb8c00'],'blue+yellow':['green','#43a047'],'blue+red':['purple','#8e24aa'],'red+white':['pink','#ff8fb1'],'black+white':['gray','#9e9e9e'],'blue+white':['light blue','#90caf9'],'white+yellow':['cream','#fff3b0'],'black+red':['dark red','#8b1a1a'],'black+blue':['navy','#1a237e'],'black+yellow':['olive','#7c7a1c']};
+const ART_TABS = [['draw','🖌️ Draw'],['lab','🧪 Color lab'],['music','🎹 Music']];
+const artTabBar = cur => `<div class="tabs">${ART_TABS.map(([k, l]) => `<button class="tab ${k === cur ? 'active' : ''}" onclick="${k === 'draw' ? 'renderArt()' : k === 'lab' ? 'renderColorLab()' : 'renderMusic()'}">${l}</button>`).join('')}</div>`;
+function renderColorLab(){
+  setResume({page:'lesson', subject:'art'}); let picks = [];
+  show(`${crumbs('Art', "openSubject('art')")}<section class="panel"><h1>🎨 Art studio</h1>${artTabBar('lab')}
+    <p class="muted">Tap two paint colors and watch them mix!</p>
+    <div class="paint-row">${PAINTS.map(([n, c]) => `<button class="paint" style="--c:${c}" data-n="${n}"><span></span>${n}</button>`).join('')}</div>
+    <div class="mix-area"><div class="mix-slot" id="mixA">?</div><span class="m-op">➕</span><div class="mix-slot" id="mixB">?</div><span class="m-op">🟰</span><div class="mix-result" id="mixR">🎨</div></div>
+    <p class="feedback" id="mixFb"></p></section><section class="panel">${activityChips('art')}</section>`);
+  document.querySelectorAll('.paint').forEach(b => b.onclick = () => {
+    const n = b.dataset.n, c = PAINTS.find(p => p[0] === n)[1];
+    if (picks.length === 2) picks = [];
+    picks.push(n); Sfx.pop();
+    const slot = document.getElementById(picks.length === 1 ? 'mixA' : 'mixB'); slot.style.background = c; slot.textContent = '';
+    if (picks.length === 1){ const b2 = document.getElementById('mixB'); b2.style.background = ''; b2.textContent = '?'; const r = document.getElementById('mixR'); r.style.background = ''; r.textContent = '🎨'; document.getElementById('mixFb').textContent = ''; speak(n, {quiet:true}); return; }
+    const key = picks.slice().sort().join('+'), res = picks[0] === picks[1] ? [picks[0], c] : MIXES[key];
+    const r = document.getElementById('mixR'); r.textContent = ''; r.style.background = res[1]; r.classList.remove('pop'); void r.offsetWidth; r.classList.add('pop');
+    const msg = picks[0] === picks[1] ? `${picks[0]} and ${picks[0]} is still ${picks[0]}!` : `${picks[0]} and ${picks[1]} make ${res[0]}!`;
+    document.getElementById('mixFb').className = 'feedback good'; document.getElementById('mixFb').textContent = '🌈 ' + msg; speak(msg, {quiet:true});
+    if (picks[0] !== picks[1]){ trackDay(); markDaily('art'); saveAll(); }
+  });
+}
+const NOTES = [['C','#ff5a5f',261.63],['D','#ff9f1c',293.66],['E','#ffd23f',329.63],['F','#3cc48a',349.23],['G','#2fb5e9',392.0],['A','#4f79ff',440.0],['B','#8b5cf6',493.88],['C','#ff6fae',523.25]];
+const SONGS = {twinkle:{name:'⭐ Twinkle, Twinkle', notes:[0,0,4,4,5,5,4,3,3,2,2,1,1,0]}, mary:{name:'🐑 Mary Had a Little Lamb', notes:[2,1,0,1,2,2,2,1,1,1,2,4,4,2,1,0,1,2,2,2,2,1,1,2,1,0]}, scale:{name:'🎵 Up the scale', notes:[0,1,2,3,4,5,6,7]}};
+function playNote(i){
+  try{ const ctx = Sfx.ctx = Sfx.ctx || new (window.AudioContext || window.webkitAudioContext)(), t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle'; o.frequency.value = NOTES[i][2]; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.3, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + .9); o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 1); }catch(e){}
+}
+const MUS = {song:null, pos:0};
+function renderMusic(){
+  setResume({page:'lesson', subject:'art'}); stopSpeaking();
+  show(`${crumbs('Art', "openSubject('art')")}<section class="panel"><h1>🎨 Art studio</h1>${artTabBar('music')}
+    <p class="muted">Tap the bars to play music! Or pick a song and follow the glowing bar.</p>
+    <div class="row-buttons">${Object.entries(SONGS).map(([k, s]) => `<button class="btn small ${MUS.song === k ? 'primary' : ''}" onclick="MUS.song='${k}';MUS.pos=0;renderMusic()">${s.name}</button>`).join('')}<button class="btn small" onclick="MUS.song=null;renderMusic()">🎹 Free play</button></div>
+    <p class="feedback" id="musFb">${MUS.song ? `Follow the glowing bar to play ${SONGS[MUS.song].name}!` : 'Free play: make your own song!'}</p>
+    <div class="xylo">${NOTES.map(([n, c], i) => `<button class="xbar" style="--c:${c};--h:${100 - i * 6}%" data-i="${i}"><span>${n}</span></button>`).join('')}</div></section>
+    <section class="panel">${activityChips('art')}</section>`);
+  const bars = [...document.querySelectorAll('.xbar')];
+  const glow = () => bars.forEach((b, k) => b.classList.toggle('next', !!MUS.song && SONGS[MUS.song].notes[MUS.pos] === k));
+  bars.forEach(b => b.onpointerdown = e => {
+    e.preventDefault(); const i = +b.dataset.i; playNote(i); b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 180);
+    if (MUS.song){ const s = SONGS[MUS.song];
+      if (s.notes[MUS.pos] === i){ MUS.pos++; if (MUS.pos >= s.notes.length){ MUS.pos = 0; recordResult('art', true, b); confetti(24); document.getElementById('musFb').textContent = `🎉 You played ${s.name}!`; } }
+    }
+    glow();
+  });
+  glow();
+}
+
+/* ---------- Chess: the starting board ---------- */
+const START_ROW = ['rook','knight','bishop','queen','king','bishop','knight','rook'];
+const BLACK_SYM = {king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟'};
+function chessSetupBoard(){
+  const cells = []; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++){
+    const p = r === 0 ? START_ROW[c] : r === 1 ? 'pawn' : r === 6 ? 'pawn' : r === 7 ? START_ROW[c] : null, black = r < 2;
+    cells.push(`<button class="${(r + c) % 2 ? 'dark' : 'light'}" ${p ? `onclick="chessSetupTap('${p}', ${black})"` : ''} aria-label="${p ? (black ? 'black ' : 'white ') + p : 'empty square'}">${p ? `<span class="${black ? 'pc-b' : 'pc-w'}">${black ? BLACK_SYM[p] : PIECES[p].sym}</span>` : ''}</button>`);
+  }
+  return `<div class="board board8" style="grid-template-columns:repeat(8,1fr)">${cells.join('')}</div>`;
+}
+function chessSetupTap(p, black){ const P = PIECES[p]; const el = document.getElementById('setupInfo'); if (el) el.innerHTML = `<h3>${black ? BLACK_SYM[p] : P.sym} ${black ? 'Black' : 'White'} ${P.name}</h3><p>${P.rule}</p>`; speak(`${black ? 'Black' : 'White'} ${P.name}. ${P.rule}`, {quiet:true}); }
+
+/* ---------- Games: Simon color memory ---------- */
+const SIMON = {seq:[], pos:0, busy:false, pads:[['#ff5a5f',329.63],['#2fb5e9',392],['#3cc48a',440],['#ffd23f',523.25]]};
+function renderSimon(){
+  setResume({page:'subject', subject:'games'});
+  show(`${crumbs('Games', 'renderGamesHub()')}<section class="panel"><div class="section-title"><h1>🌈 Color memory</h1><span class="pill">🏆 Best: ${saved.simonBest || 0}</span></div>
+    <p>Watch the colors light up, then tap them in the same order. Each round adds one more!</p>
+    <div class="simon">${SIMON.pads.map((p, i) => `<button class="simon-pad" style="--c:${p[0]}" data-i="${i}" aria-label="pad ${i + 1}"></button>`).join('')}</div>
+    <p class="ttt-status" id="simonMsg">Tap Start!</p><div class="row-buttons"><button class="btn primary big" onclick="simonStart()">▶️ Start</button></div></section>`);
+  document.querySelectorAll('.simon-pad').forEach(b => b.onpointerdown = e => { e.preventDefault(); simonTap(+b.dataset.i); });
+}
+function simonFlash(i){ const b = document.querySelectorAll('.simon-pad')[i]; if (!b) return; b.classList.add('lit'); Sfx.tone(SIMON.pads[i][1], .35, 'sine', 0, .18); setTimeout(() => b.classList.remove('lit'), 350); }
+function simonStart(){ SIMON.seq = []; simonNext(); }
+function simonNext(){
+  SIMON.seq.push(rand(0, 3)); SIMON.pos = 0; SIMON.busy = true;
+  const m = document.getElementById('simonMsg'); if (m) m.textContent = `👀 Watch… (round ${SIMON.seq.length})`;
+  SIMON.seq.forEach((v, k) => setTimeout(() => simonFlash(v), 700 + k * 600));
+  setTimeout(() => { SIMON.busy = false; const mm = document.getElementById('simonMsg'); if (mm) mm.textContent = '👆 Your turn!'; }, 700 + SIMON.seq.length * 600);
+}
+function simonTap(i){
+  if (SIMON.busy || !SIMON.seq.length) return;
+  simonFlash(i);
+  if (SIMON.seq[SIMON.pos] !== i){
+    const score = SIMON.seq.length - 1; SIMON.seq = []; Sfx.bad();
+    if (score > (saved.simonBest || 0)){ saved.simonBest = score; saveAll(); }
+    const m = document.getElementById('simonMsg'); if (m) m.textContent = `Oops! You remembered ${score} in a row. Tap Start to play again.`;
+    speak(`You remembered ${score} in a row!`, {quiet:true}); if (score >= 3) recordResult('games', true); return;
+  }
+  SIMON.pos++;
+  if (SIMON.pos === SIMON.seq.length){ SIMON.busy = true; const m = document.getElementById('simonMsg'); if (m) m.textContent = '🌟 Great memory!'; setTimeout(simonNext, 900); }
+}
+
+/* ---------- Interactive world map (country shapes: Natural Earth, public domain) ---------- */
+const CONTINENTS = {
+  'Asia':{name:'Asia', color:'#ffb4c8', animals:'🐼 🐘 🐯 🐪', fact:'Asia is the biggest continent. More people live here than anywhere else. Bangladesh is in Asia!', box:[25, -12, 150, 80]},
+  'Africa':{name:'Africa', color:'#ffd27a', animals:'🦁 🦒 🦓 🦛', fact:'Africa has the Sahara, the biggest hot desert, and the long Nile River.', box:[-20, -36, 55, 38]},
+  'North America':{name:'North America', color:'#a9ddff', animals:'🦅 🐻 🦬 🦌', fact:'North America has the United States, Canada and Mexico.', box:[-170, 7, -50, 84]},
+  'South America':{name:'South America', color:'#b8e8c1', animals:'🦜 🦙 🐒 🐆', fact:'South America has the Amazon, the biggest rainforest in the world.', box:[-85, -56, -33, 13]},
+  'Europe':{name:'Europe', color:'#d3c1ff', animals:'🦔 🦌 🦊 🐻', fact:'Europe has many countries close together, like France, Italy and the United Kingdom.', box:[-25, 34, 45, 72]},
+  'Oceania':{name:'Australia & Oceania', color:'#ffc4a3', animals:'🦘 🐨 🦜 🐢', fact:'Australia is the smallest continent. Kangaroos and koalas live there.', box:[110, -48, 180, 0]},
+  'Antarctica':{name:'Antarctica', color:'#e6edf5', animals:'🐧 🦭 🐋', fact:'Antarctica is the coldest place on Earth. It is covered in ice, and penguins live here.', box:[-180, -90, 180, -60]}
+};
+const OCEANS = [['Pacific Ocean', -145, 8, 'The Pacific is the biggest and deepest ocean.'], ['Pacific Ocean', 170, -18, 'The Pacific is the biggest and deepest ocean.'], ['Atlantic Ocean', -38, 22, 'The Atlantic is between the Americas, Europe and Africa.'], ['Indian Ocean', 78, -24, 'The Indian Ocean is warm. It is south of India and Bangladesh.'], ['Arctic Ocean', 20, 83, 'The Arctic Ocean is near the North Pole. Polar bears live nearby.'], ['Southern Ocean', 40, -60, 'The Southern Ocean goes all the way around Antarctica.']];
+const COUNTRY_INFO = {
+  'United States':['Washington, D.C.','has 50 states and the bald eagle.'], 'Canada':['Ottawa','has lots of lakes, forests and moose.'], 'Mexico':['Mexico City','is famous for tacos and colorful festivals.'],
+  'Brazil':['Brasília','has the giant Amazon rainforest.'], 'Argentina':['Buenos Aires','has the tall Andes mountains.'], 'Peru':['Lima','has Machu Picchu, an old city in the mountains.'], 'Chile':['Santiago','is very long and thin.'], 'Colombia':['Bogotá','grows lots of coffee and flowers.'],
+  'United Kingdom':['London','has the Big Ben clock tower.'], 'France':['Paris','has the Eiffel Tower.'], 'Spain':['Madrid','is sunny with beautiful beaches.'], 'Italy':['Rome','is shaped like a boot!'], 'Germany':['Berlin','is famous for castles and forests.'], 'Norway':['Oslo','is a place to see the northern lights.'], 'Sweden':['Stockholm','has snowy winters and long summer days.'], 'Greece':['Athens','has very old temples.'],
+  'Russia':['Moscow','is the biggest country in the world.'], 'China':['Beijing','has the Great Wall and giant pandas.'], 'India':['New Delhi','has the Taj Mahal and Bengal tigers.'], 'Bangladesh':['Dhaka','has the Sundarbans, home of the Royal Bengal tiger, and many rivers.'], 'Pakistan':['Islamabad','has very tall mountains.'], 'Nepal':['Kathmandu','has Mount Everest, the tallest mountain.'],
+  'Japan':['Tokyo','is made of islands and has Mount Fuji.'], 'South Korea':['Seoul','is famous for kimchi.'], 'Indonesia':['Jakarta','has more than 17,000 islands.'], 'Malaysia':['Kuala Lumpur','has tall twin towers and rainforests.'], 'Thailand':['Bangkok','has elephants and golden temples.'], 'Mongolia':['Ulaanbaatar','has wide grasslands and wild horses.'],
+  'Saudi Arabia':['Riyadh','has big deserts and the holy city of Makkah.'], 'Turkey':['Ankara','is in both Europe and Asia.'], 'Iran':['Tehran','has beautiful carpets and mountains.'], 'Iraq':['Baghdad','has two famous rivers, the Tigris and Euphrates.'], 'United Arab Emirates':['Abu Dhabi','has the tallest building, the Burj Khalifa.'],
+  'Egypt':['Cairo','has the pyramids and the Nile River.'], 'Nigeria':['Abuja','has more people than any other country in Africa.'], 'Kenya':['Nairobi','has lions, zebras and giraffes.'], 'South Africa':['Pretoria','has three capital cities and penguins on its beaches!'], 'Morocco':['Rabat','has colorful markets and the Sahara.'], 'Ethiopia':['Addis Ababa','is where coffee comes from.'], 'Madagascar':['Antananarivo','is an island with lemurs.'],
+  'Australia':['Canberra','has kangaroos and koalas.'], 'New Zealand':['Wellington','has kiwi birds.'], 'Greenland':['Nuuk','is the biggest island in the world.'], 'Antarctica':['', 'is the coldest place on Earth.']
+};
+const FIND_COUNTRIES = ['United States','Canada','Mexico','Brazil','Argentina','Peru','Chile','Russia','China','India','Bangladesh','Australia','Egypt','Japan','Saudi Arabia','South Africa','France','United Kingdom','Italy','Greenland','Kenya','Indonesia','Nigeria','Turkey','Spain','Germany','Norway','Madagascar','Mongolia','Pakistan','Iran','New Zealand'];
+const WM = {data:null, mode:'continents', target:null, zoom:null, sel:null, found:0, tries:0, level:'continents'};
+const W = 1000, H = 500, px = lon => (lon + 180) / 360 * W, py = lat => (90 - lat) / 180 * H;
+async function loadWorld(){
+  if (WM.data) return WM.data;
+  const res = await fetch('world.json'); const raw = await res.json();
+  WM.data = raw.filter(f => f.c !== 'Seven seas (open ocean)').map(f => ({...f, d:f.p.map(poly => poly.map(r => 'M' + r.map(([x, y]) => `${px(x).toFixed(1)},${py(y).toFixed(1)}`).join('L') + 'Z').join('')).join('')}));
+  return WM.data;
+}
+function countryCard(f){
+  const info = COUNTRY_INFO[f.n], c = CONTINENTS[f.c];
+  return `<div class="country-card">${f.i ? flagImg(f.i, 80) : ''}<div><h3>${esc(f.n)}</h3><p>🌍 ${c ? c.name : f.c}${info && info[0] ? ` · 🏛️ Capital: <b>${esc(info[0])}</b>` : ''}</p>${info ? `<p>${esc(f.n)} ${esc(info[1])}</p>` : ''}</div></div>`;
+}
+function renderWorld(zoneId){
+  const z = document.getElementById(zoneId); if (!z) return;
+  z.innerHTML = `<div class="toolbar">
+      <div class="seg">${[['continents','🗺️ Continents'],['countries','🏳️ Countries'],['find','🎯 Find it!']].map(([m, l]) => `<button class="${WM.mode === m ? 'active' : ''}" onclick="WM.mode='${m}';WM.target=null;WM.sel=null;renderWorld('${zoneId}')">${l}</button>`).join('')}</div>
+      ${WM.mode === 'find' ? `<div class="seg">${[['continents','Continents'],['countries','Countries']].map(([m, l]) => `<button class="${WM.level === m ? 'active' : ''}" onclick="WM.level='${m}';WM.target=null;renderWorld('${zoneId}')">${l}</button>`).join('')}</div>` : ''}
+    </div>
+    <div class="fact world-info" id="worldInfo" aria-live="polite"></div>
+    <div class="zoom-row">${Object.entries(CONTINENTS).filter(([k]) => k !== 'Antarctica').map(([k, c]) => `<button class="chip-btn ${WM.zoom === k ? 'active' : ''}" style="--c:${c.color}" onclick="worldZoom('${k}')">${c.name}</button>`).join('')}<button class="chip-btn ${!WM.zoom ? 'active' : ''}" onclick="worldZoom(null)">🌍 Whole world</button></div>
+    <div class="world-wrap"><svg id="worldSvg" class="world-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="World map"><rect width="${W}" height="${H}" fill="#a9d8f5"/><text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="22" fill="#2a5d80">Loading the world… 🌍</text></svg></div>
+    <p class="tiny">Map: Natural Earth (public domain). Flags: flagcdn.com. Country borders are simplified for kids.</p>`;
+  loadWorld().then(() => drawWorld(zoneId)).catch(() => { const s = document.getElementById('worldSvg'); if (s) s.innerHTML = `<rect width="${W}" height="${H}" fill="#a9d8f5"/><text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="22">The world map could not load. Check the internet.</text>`; });
+}
+function worldInfo(html){ const el = document.getElementById('worldInfo'); if (el) el.innerHTML = html; }
+function drawWorld(zoneId){
+  const svg = document.getElementById('worldSvg'); if (!svg || !WM.data) return;
+  if (WM.mode === 'find' && !WM.target) worldNewTarget();
+  const fill = f => {
+    const c = CONTINENTS[f.c] ? CONTINENTS[f.c].color : '#ddd';
+    if (WM.mode === 'countries') return WM.sel === f.n ? '#ff9f1c' : c;
+    if (WM.mode === 'continents' && WM.sel && WM.sel !== f.c) return '#f4f1ea';
+    return c;
+  };
+  const labels = WM.mode === 'continents' ? Object.entries(CONTINENTS).map(([k, c]) => { const [x1, y1, x2, y2] = c.box; return `<text class="cont-label" x="${px((x1 + x2) / 2)}" y="${py((y1 + y2) / 2)}" text-anchor="middle">${c.name}</text>`; }).join('') : '';
+  svg.innerHTML = `<rect width="${W}" height="${H}" fill="#a9d8f5"/>
+    ${WM.data.map((f, i) => `<path d="${f.d}" fill="${fill(f)}" stroke="#ffffff" stroke-width="${WM.zoom ? .6 : .9}" data-i="${i}" class="wpath"><title>${esc(f.n)}</title></path>`).join('')}
+    ${OCEANS.map(([n, lon, lat], k) => `<text class="ocean-label" x="${px(lon)}" y="${py(lat)}" text-anchor="middle" data-o="${k}">${n}</text>`).join('')}${labels}`;
+  svg.querySelectorAll('.wpath').forEach(p => p.addEventListener('click', () => worldTap(WM.data[+p.dataset.i], p)));
+  svg.querySelectorAll('.ocean-label').forEach(t => t.addEventListener('click', () => { const o = OCEANS[+t.dataset.o]; worldInfo(`<h3>🌊 ${o[0]}</h3><p>${o[3]}</p>`); speak(`${o[0]}. ${o[3]}`, {quiet:true}); }));
+  setViewBox(svg, WM.zoom);
+  if (WM.mode === 'find'){
+    const t = WM.target; worldInfo(`<h3>🎯 Find ${esc(t)}!</h3><p>Tap it on the map. ${WM.found ? `Found: <b>${WM.found}</b> ⭐` : ''}</p>`);
+  } else if (!WM.sel) worldInfo(WM.mode === 'continents' ? '<h3>🗺️ The 7 continents</h3><p>Tap a continent to learn about it. Tap an ocean name to hear about the ocean.</p>' : '<h3>🏳️ Countries of the world</h3><p>Tap any country to see its name and flag. Use the buttons to zoom in on a continent.</p>');
+}
+function setViewBox(svg, key){
+  if (!key){ svg.setAttribute('viewBox', `0 0 ${W} ${H}`); return; }
+  const [x1, y1, x2, y2] = CONTINENTS[key].box, pad = 4;
+  svg.setAttribute('viewBox', `${px(x1 - pad)} ${py(y2 + pad)} ${px(x2 + pad) - px(x1 - pad)} ${py(y1 - pad) - py(y2 + pad)}`);
+}
+function worldZoom(key){ WM.zoom = key; document.querySelectorAll('.zoom-row .chip-btn').forEach(b => b.classList.toggle('active', b.textContent === (key ? CONTINENTS[key].name : '🌍 Whole world'))); const svg = document.getElementById('worldSvg'); if (svg){ svg.classList.add('zooming'); setViewBox(svg, key); setTimeout(() => svg.classList.remove('zooming'), 400); drawWorld(); } Sfx.tap(); }
+function worldNewTarget(){
+  const cont = Object.keys(CONTINENTS).filter(k => k !== WM.lastTarget);
+  WM.target = WM.level === 'continents' ? CONTINENTS[pick(cont)].name : pick(FIND_COUNTRIES.filter(n => n !== WM.lastTarget));
+  WM.lastTarget = WM.target; WM.tries = 0;
+  speak(`Find ${WM.target}!`, {quiet:true});
+}
+function worldTap(f, path){
+  const cont = CONTINENTS[f.c];
+  if (WM.mode === 'continents'){
+    WM.sel = f.c; drawWorld();
+    worldInfo(`<h3>${cont ? cont.name : f.c} <span class="big-emo">${cont ? cont.animals : ''}</span></h3><p>${cont ? cont.fact : ''}</p><p class="tiny">You tapped ${esc(f.n)}.</p>`);
+    speak(`${cont.name}. ${cont.fact}`, {quiet:true}); trackDay(); markDaily('geo'); return;
+  }
+  if (WM.mode === 'countries'){
+    WM.sel = f.n; drawWorld(); worldInfo(countryCard(f));
+    const info = COUNTRY_INFO[f.n];
+    speak(`${f.n}. ${info && info[0] ? 'The capital is ' + info[0] + '. ' : ''}${info ? f.n + ' ' + info[1] : 'It is in ' + (cont ? cont.name : '') + '.'}`, {quiet:true}); return;
+  }
+  // find game
+  const ok = WM.level === 'continents' ? (cont && cont.name === WM.target) : f.n === WM.target;
+  if (ok){
+    WM.found++; recordResult('geo', true, path); confetti(14);
+    const msg = WM.level === 'continents' ? `${cont.name}! ${cont.fact}` : `${f.n}! ${COUNTRY_INFO[f.n] ? f.n + ' ' + COUNTRY_INFO[f.n][1] : ''}`;
+    speak(`Yes! ${msg}`, {quiet:true});
+    worldInfo(`<h3>🌟 You found ${esc(WM.target)}!</h3><p>${esc(msg)}</p><button class="btn primary" onclick="WM.target=null;drawWorld()">Next →</button>`);
+    path.setAttribute('fill', '#3cc48a');
+  } else {
+    WM.tries++; Sfx.bad(); path.setAttribute('fill', '#ff9b8a'); setTimeout(() => drawWorld(), 700);
+    const hint = WM.level === 'countries' && WM.tries >= 2 ? (() => { const t = WM.data.find(x => x.n === WM.target); return t ? ` Hint: it is in ${CONTINENTS[t.c].name}.` : ''; })() : '';
+    speak(`That is ${f.n}. Try again!${hint}`, {quiet:true});
+    setTimeout(() => worldInfo(`<h3>🎯 Find ${esc(WM.target)}!</h3><p>That was ${esc(f.n)}. Try again!${esc(hint)}</p>`), 10);
+  }
+}
+/* geography activities */
+MATCHES.flags = {title:'Match the flag to the country', pairs:[['BD','Bangladesh'],['US','United States'],['CA','Canada'],['GB','United Kingdom'],['JP','Japan'],['IN','India'],['BR','Brazil'],['SA','Saudi Arabia'],['FR','France'],['CN','China'],['AU','Australia'],['EG','Egypt'],['MX','Mexico'],['TR','Turkey'],['DE','Germany']].map(([i, n]) => [flagImg(i, 80), n, '', n])};
+MATCHES.continentAnimals = {title:'Match the animal to its continent', pairs:[['🦘 kangaroo','Australia'],['🐧 penguin','Antarctica'],['🦁 lion','Africa'],['🐼 panda','Asia'],['🦬 bison','North America'],['🦙 llama','South America'],['🦔 hedgehog','Europe']].map(([a, b]) => [a, b, a.slice(3), b])};
+MATCHES.capitals = {title:'Match the country to its capital', pairs:Object.entries(COUNTRY_INFO).filter(([n, v]) => v[0] && FIND_COUNTRIES.includes(n)).map(([n, v]) => [n, v[0], n, v[0]])};
+GEN.geo.push(
+  ['flags', () => { const p = pick(MATCHES.flags.pairs), o = shuffle(MATCHES.flags.pairs.filter(x => x !== p)).slice(0, 2).map(x => x[1]); return {q:'Which country has this flag?', html:`<div style="margin:10px 0">${p[0].replace('w80', 'w160')}</div>`, choices:[p[1], ...o], a:p[1], explain:`That is the flag of ${p[1]}.`}; }],
+  ['continents', () => { const n = pick(Object.keys(COUNTRY_INFO).filter(k => k !== 'Antarctica')); const f = {Egypt:'Africa',Kenya:'Africa',Nigeria:'Africa','South Africa':'Africa',Morocco:'Africa',Ethiopia:'Africa',Madagascar:'Africa',Brazil:'South America',Argentina:'South America',Peru:'South America',Chile:'South America',Colombia:'South America','United States':'North America',Canada:'North America',Mexico:'North America',Greenland:'North America',Australia:'Australia & Oceania','New Zealand':'Australia & Oceania'}[n] || (['United Kingdom','France','Spain','Italy','Germany','Norway','Sweden','Greece','Russia'].includes(n) ? 'Europe' : 'Asia');
+    const names = Object.values(CONTINENTS).map(c => c.name).filter(x => x !== 'Antarctica'); return {q:`Which continent is ${n} in?`, choices:[f, ...shuffle(names.filter(x => x !== f)).slice(0, 2)], a:f, explain:`${n} is in ${f}.`}; }],
+  ['world capitals', () => { const [n, v] = pick(Object.entries(COUNTRY_INFO).filter(([, v]) => v[0])); const o = shuffle(Object.values(COUNTRY_INFO).filter(x => x[0] && x[0] !== v[0])).slice(0, 2).map(x => x[0]); return {q:`What is the capital of ${n}?`, choices:[v[0], ...o], a:v[0], explain:`The capital of ${n} is ${v[0]}.`}; }]
+);
+
+/* ---------- Bangla & Arabic alphabets ---------- */
+/* [letter, name in English letters, how an English voice should say it, word, word in English letters, meaning, emoji] */
+const BN_VOWELS = [
+  ['অ','ô','aw','অজগর','ôjogor','python','🐍'],['আ','a','aah','আম','am','mango','🥭'],['ই','i','ee','ইঁদুর','indur','mouse','🐭'],['ঈ','dirgho i','long ee','ঈগল','igol','eagle','🦅'],
+  ['উ','u','oo','উট','ut','camel','🐪'],['ঊ','dirgho u','long oo','ঊষা','usha','dawn','🌅'],['ঋ','ri','ree','ঋষি','rishi','wise man','🧙'],['এ','e','eh','একতারা','ektara','one-string guitar','🪕'],
+  ['ঐ','oi','oy','ঐরাবত','oirabot','elephant','🐘'],['ও','o','oh','ওল','ol','yam','🍠'],['ঔ','ou','ow','ঔষধ','oushodh','medicine','💊']
+];
+const BN_CONS = [
+  ['ক','ko','kaw','কলা','kola','banana','🍌'],['খ','kho','khaw','খরগোশ','khorgosh','rabbit','🐰'],['গ','go','gaw','গরু','goru','cow','🐄'],['ঘ','gho','ghaw','ঘড়ি','ghori','clock','⏰'],['ঙ','ungo','ung','ব্যাঙ','byang','frog','🐸'],
+  ['চ','cho','chaw','চাঁদ','chand','moon','🌙'],['ছ','chho','chhaw','ছাতা','chhata','umbrella','☂️'],['জ','jo','jaw','জাহাজ','jahaj','ship','🚢'],['ঝ','jho','jhaw','ঝুড়ি','jhuri','basket','🧺'],['ঞ','niyo','nee-yaw','মিঞা','mia','man','👨'],
+  ['ট','ṭo','taw','টমেটো','tomato','tomato','🍅'],['ঠ','ṭho','thaw','ঠোঁট','thot','lips','👄'],['ড','ḍo','daw','ডাব','dab','green coconut','🥥'],['ঢ','ḍho','dhaw','ঢোল','dhol','drum','🥁'],['ণ','murdhonno no','naw','হরিণ','horin','deer','🦌'],
+  ['ত','to','taw, soft','তরমুজ','tormuj','watermelon','🍉'],['থ','tho','thaw, soft','থালা','thala','plate','🍽️'],['দ','do','daw, soft','দরজা','dorja','door','🚪'],['ধ','dho','dhaw, soft','ধান','dhan','rice plant','🌾'],['ন','donto no','naw','নৌকা','nouka','boat','⛵'],
+  ['প','po','paw','পাখি','pakhi','bird','🐦'],['ফ','pho','faw','ফুল','phul','flower','🌸'],['ব','bo','baw','বই','boi','book','📖'],['ভ','bho','bhaw','ভালুক','bhaluk','bear','🐻'],['ম','mo','maw','মাছ','mach','fish','🐟'],
+  ['য','ontostho jo','jaw','যাদু','jadu','magic','🪄'],['র','ro','raw','রংধনু','rongdhonu','rainbow','🌈'],['ল','lo','law','লেবু','lebu','lemon','🍋'],['শ','talobbo sho','shaw','শাপলা','shapla','water lily','🪷'],['ষ','murdhonno sho','shaw','ষাঁড়','shar','bull','🐂'],
+  ['স','donto so','saw','সাপ','shap','snake','🐍'],['হ','ho','haw','হাঁস','hash','duck','🦆'],['ড়','ṛo','raw, flapped','পাহাড়','pahar','hill','⛰️'],['ঢ়','ṛho','rhaw','আষাঢ়','ashar','rainy month','🌧️'],['য়','ontostho o','yaw','ময়ূর','moyur','peacock','🦚'],
+  ['ৎ','khondo to','t','শরৎ','shorot','autumn','🍂'],['ং','onushar','ng','রং','rong','color','🎨'],['ঃ','bisorgo','h','দুঃখ','dukkho','sad','😢'],['ঁ','chondrobindu','a nasal sound','চাঁদ','chand','moon','🌙']
+];
+const BN_NUMS = [['০','shunno','zero'],['১','ek','one'],['২','dui','two'],['৩','tin','three'],['৪','char','four'],['৫','panch','five'],['৬','chhoy','six'],['৭','shat','seven'],['৮','at','eight'],['৯','noy','nine'],['১০','dosh','ten']];
+/* [letter, name, Arabic name (for an Arabic voice), sound hint, word, word in English letters, meaning, emoji, joins to next letter?] */
+const AR_LETTERS = [
+  ['ا','alif','ألف','ah','أسد','asad','lion','🦁',0],['ب','ba','باء','b','بطة','batta','duck','🦆',1],['ت','ta','تاء','t','تفاحة','tuffaha','apple','🍎',1],['ث','tha','ثاء','th, as in think','ثعلب','tha‘lab','fox','🦊',1],
+  ['ج','jim','جيم','j','جمل','jamal','camel','🐪',1],['ح','ḥa','حاء','a breathy h','حصان','ḥisan','horse','🐴',1],['خ','kha','خاء','kh, like clearing your throat','خروف','kharuf','sheep','🐑',1],['د','dal','دال','d','دب','dubb','bear','🐻',0],
+  ['ذ','dhal','ذال','th, as in this','ذرة','dhura','corn','🌽',0],['ر','ra','راء','a rolled r','ريشة','risha','feather','🪶',0],['ز','zay','زاي','z','زرافة','zarafa','giraffe','🦒',0],['س','sin','سين','s','سمكة','samaka','fish','🐟',1],
+  ['ش','shin','شين','sh','شمس','shams','sun','☀️',1],['ص','ṣad','صاد','a heavy s','صقر','ṣaqr','falcon','🦅',1],['ض','ḍad','ضاد','a heavy d','ضفدع','ḍifda‘','frog','🐸',1],['ط','ṭa','طاء','a heavy t','طائرة','ṭa’ira','airplane','✈️',1],
+  ['ظ','ẓa','ظاء','a heavy th','ظرف','ẓarf','envelope','✉️',1],['ع','‘ayn','عين','a deep throat sound','عين','‘ayn','eye','👁️',1],['غ','ghayn','غين','gh, like gargling','غيمة','ghayma','cloud','☁️',1],['ف','fa','فاء','f','فيل','fil','elephant','🐘',1],
+  ['ق','qaf','قاف','a deep k','قمر','qamar','moon','🌙',1],['ك','kaf','كاف','k','كتاب','kitab','book','📖',1],['ل','lam','لام','l','ليمون','laymun','lemon','🍋',1],['م','mim','ميم','m','موز','mawz','banana','🍌',1],
+  ['ن','nun','نون','n','نجمة','najma','star','⭐',1],['ه','ha','هاء','h','هدية','hadiyya','gift','🎁',1],['و','waw','واو','w','وردة','warda','rose','🌹',0],['ي','ya','ياء','y','يد','yad','hand','✋',1]
+];
+const AR_NUMS = [['٠','sifr','zero','صفر'],['١','wahid','one','واحد'],['٢','ithnan','two','اثنان'],['٣','thalatha','three','ثلاثة'],['٤','arba‘a','four','أربعة'],['٥','khamsa','five','خمسة'],['٦','sitta','six','ستة'],['٧','sab‘a','seven','سبعة'],['٨','thamaniya','eight','ثمانية'],['٩','tis‘a','nine','تسعة'],['١٠','‘ashara','ten','عشرة']];
+
+/* Speak in Bangla or Arabic when the device has that voice; otherwise use an English pronunciation guide */
+Voice.forLang = function(code){ return this.list.filter(v => (v.lang || '').toLowerCase().replace('_', '-').startsWith(code)).sort((a, b) => this.score({...a, lang:'en-US', name:a.name}) - this.score({...b, lang:'en-US', name:b.name}))[0] || null; };
+let langNoticeShown = {};
+function speakIn(code, native, english){
+  const v = Voice.forLang(code);
+  if (v) return speak(native, {lang:code, quiet:true});
+  if (!langNoticeShown[code]){ langNoticeShown[code] = true; toast(`No ${code === 'bn' ? 'Bangla' : 'Arabic'} voice on this device, so the English voice will help. See ⚙️ Settings for tips.`); }
+  return speak(english, {quiet:true});
+}
+const ALPHA_TABS = [['bnv','🇧🇩 বাংলা স্বরবর্ণ'],['bnc','🇧🇩 ব্যঞ্জনবর্ণ'],['bnn','🇧🇩 সংখ্যা ১২৩'],['ar','🇸🇦 الحروف Arabic'],['arn','🇸🇦 Arabic numbers ١٢٣']];
+function renderAlphabets(tab){
+  tab = tab || renderAlphabets.tab || 'bnv'; renderAlphabets.tab = tab;
+  setResume({page:'lesson', subject:'alphabets'});
+  const isAr = tab.startsWith('ar');
+  const bnV = !!Voice.forLang('bn'), arV = !!Voice.forLang('ar');
+  show(`${crumbs('Bangla & Arabic', "openSubject('alphabets')")}
+  <section class="panel"><div class="section-title"><h1>🔤 Bangla & Arabic letters</h1><span class="pill ${(isAr ? arV : bnV) ? 'mint' : ''}">${(isAr ? arV : bnV) ? '🔊 Native voice ready' : '🔊 English helper voice'}</span></div>
+    <div class="tabs">${ALPHA_TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'active' : ''}" onclick="renderAlphabets('${k}')">${l}</button>`).join('')}</div>
+    <div id="alphaZone"></div></section>
+  <section class="panel">${activityChips('alphabets')}</section>`);
+  ({bnv:() => alphaGrid('bn', BN_VOWELS, 'স্বরবর্ণ: vowels', 'Bangla has 11 vowels. Tap a letter to hear it and see a word.'), bnc:() => alphaGrid('bn', BN_CONS, 'ব্যঞ্জনবর্ণ: consonants', 'Bangla has 39 consonants. Tap a letter to hear it and see a word.'), bnn:() => numGrid('bn'), ar:() => alphaGrid('ar', AR_LETTERS, 'Arabic letters', 'Arabic has 28 letters and is read from right to left. Tap a letter to see its shapes and a word.'), arn:() => numGrid('ar')})[tab]();
+}
+function alphaGrid(lang, list, title, intro){
+  const z = document.getElementById('alphaZone');
+  z.innerHTML = `<h2>${title}</h2><p class="muted">${intro}</p>
+    <div class="alpha-detail" id="alphaDetail"></div>
+    <div class="letter-grid ${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">${list.map((L, i) => `<button class="letter-btn ${lang}" onclick="alphaPick('${lang}',${list === BN_VOWELS ? "'v'" : list === BN_CONS ? "'c'" : "'a'"},${i})"><span class="glyph">${L[0]}</span><small>${esc(L[1])}</small></button>`).join('')}</div>`;
+  alphaPick(lang, list === BN_VOWELS ? 'v' : list === BN_CONS ? 'c' : 'a', 0, true);
+}
+function alphaPick(lang, set, i, quiet){
+  const list = set === 'v' ? BN_VOWELS : set === 'c' ? BN_CONS : AR_LETTERS, L = list[i], d = document.getElementById('alphaDetail'); if (!d) return;
+  document.querySelectorAll('.letter-btn').forEach((b, k) => b.classList.toggle('active', k === i));
+  let html;
+  if (lang === 'bn'){
+    const [ch, name, , word, wr, mean, em] = L;
+    html = `<div class="alpha-card"><div class="alpha-big bn">${ch}</div><div class="alpha-info"><h2>${ch} <small>(${esc(name)})</small></h2><p class="alpha-word"><span class="big-emo">${em}</span> <span class="bn-text">${word}</span> <small>${esc(wr)} = ${esc(mean)}</small></p>
+      <div class="row-buttons"><button class="btn sky" onclick="alphaSay('bn','${set}',${i})">🔊 Hear it</button><button class="btn secondary" onclick="openTrace('${ch}','bn')">✏️ Trace it</button><button class="btn" ${i === 0 ? 'disabled' : ''} onclick="alphaPick('bn','${set}',${i - 1})">←</button><button class="btn" ${i === list.length - 1 ? 'disabled' : ''} onclick="alphaPick('bn','${set}',${i + 1})">→</button></div></div></div>`;
+  } else {
+    const [ch, name, , hint, word, wr, mean, em, joins] = L, T = 'ـ';
+    const forms = joins ? [['Alone', ch], ['Start', ch + T], ['Middle', T + ch + T], ['End', T + ch]] : [['Alone', ch], ['End', T + ch]];
+    html = `<div class="alpha-card"><div class="alpha-big ar">${ch}</div><div class="alpha-info"><h2>${esc(name)} <small>(sounds like ${esc(hint)})</small></h2><p class="alpha-word"><span class="big-emo">${em}</span> <span class="ar-text">${word}</span> <small>${esc(wr)} = ${esc(mean)}</small></p>
+      <div class="ar-forms">${forms.map(([n, f]) => `<div><span class="ar-text">${f}</span><small>${n}</small></div>`).join('')}</div>${joins ? '' : '<p class="tiny">This letter does not join to the letter after it.</p>'}
+      <div class="row-buttons"><button class="btn sky" onclick="alphaSay('ar','a',${i})">🔊 Hear it</button><button class="btn secondary" onclick="openTrace('${ch}','ar')">✏️ Trace it</button><button class="btn" ${i === 0 ? 'disabled' : ''} onclick="alphaPick('ar','a',${i - 1})">→</button><button class="btn" ${i === list.length - 1 ? 'disabled' : ''} onclick="alphaPick('ar','a',${i + 1})">←</button></div></div></div>`;
+  }
+  d.innerHTML = html;
+  if (!quiet){ alphaSay(lang, set, i); trackDay(); saveAll(); }
+}
+function alphaSay(lang, set, i){
+  if (lang === 'bn'){ const L = (set === 'v' ? BN_VOWELS : BN_CONS)[i]; return speakIn('bn', `${L[0]}। ${L[3]}।`, `${L[2]}. ${L[4]}. ${L[5]}.`); }
+  const L = AR_LETTERS[i]; return speakIn('ar', `${L[2]}. ${L[4]}.`, `${L[1]}. ${L[5]}. ${L[6]}.`);
+}
+function numGrid(lang){
+  const list = lang === 'bn' ? BN_NUMS : AR_NUMS, z = document.getElementById('alphaZone');
+  z.innerHTML = `<h2>${lang === 'bn' ? 'বাংলা সংখ্যা: Bangla numbers' : 'الأرقام: Arabic numbers'}</h2><p class="muted">Tap a number to hear it. Count the dots to check!</p>
+    <div class="grid lesson-grid">${list.map((n, i) => `<button class="lesson-card num-card" onclick="${lang === 'bn' ? `speakIn('bn','${n[0]}','${n[1]}. ${n[2]}')` : `speakIn('ar','${n[3]}','${n[1]}. ${n[2]}')`}"><span class="glyph ${lang}">${n[0]}</span><b>${esc(n[1])}</b><small>${n[2]} · ${i}</small><span class="dots">${'●'.repeat(i)}</span></button>`).join('')}</div>`;
+}
+/* tracing a big letter */
+function openTrace(ch, lang){
+  const d = document.getElementById('alphaDetail'); if (!d) return;
+  d.insertAdjacentHTML('beforeend', `<div class="trace-box" id="traceBox"><div class="canvas-stack trace-stack"><canvas id="traceGuide" width="420" height="420"></canvas><canvas id="traceDraw" width="420" height="420"></canvas></div>
+    <div class="row-buttons"><button class="btn small warn" onclick="document.getElementById('traceDraw').getContext('2d').clearRect(0,0,420,420)">🗑️ Clear</button><button class="btn small primary" onclick="traceDone()">✅ I traced it!</button><button class="btn small" onclick="document.getElementById('traceBox').remove()">Close</button></div></div>`);
+  document.getElementById('traceBox').scrollIntoView({behavior:'smooth', block:'center'});
+  const g = document.getElementById('traceGuide').getContext('2d');
+  g.font = `${lang === 'ar' ? 280 : 300}px ${lang === 'ar' ? '"Noto Naskh Arabic","Geeza Pro","Arial"' : '"Noto Sans Bengali","Kohinoor Bangla","Nirmala UI","Vrinda",sans-serif'}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#f1ecff'; g.fillText(ch, 210, lang === 'ar' ? 200 : 230); g.setLineDash([10, 9]); g.lineWidth = 4; g.strokeStyle = '#b9a8ee'; g.strokeText(ch, 210, lang === 'ar' ? 200 : 230);
+  const c = document.getElementById('traceDraw'), ctx = c.getContext('2d'); ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = 16; ctx.strokeStyle = '#ff6fae';
+  let on = false, last = null; const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+  c.addEventListener('pointerdown', e => { on = true; last = pos(e); try{ c.setPointerCapture(e.pointerId); }catch(err){} e.preventDefault(); });
+  c.addEventListener('pointermove', e => { if (!on) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(...last); ctx.lineTo(...p); ctx.stroke(); last = p; e.preventDefault(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => c.addEventListener(ev, () => on = false));
+  speak('Trace the letter with your finger!', {quiet:true});
+}
+function traceDone(){ recordResult('alphabets', true, document.getElementById('traceBox')); confetti(16); speak(pick(cheers) + ' Beautiful writing!', {quiet:true}); }
+
+/* alphabet games */
+MATCHES.bnPics = {title:'Match the Bangla letter to its picture', get pairs(){ return [...BN_VOWELS, ...BN_CONS.slice(0, 32)].map(L => [`<span class="glyph bn">${L[0]}</span>`, `<span class="big-emo">${L[6]}</span><small>${L[4]}</small>`, '', L[5]]); }};
+MATCHES.arPics = {title:'Match the Arabic letter to its picture', get pairs(){ return AR_LETTERS.map(L => [`<span class="glyph ar">${L[0]}</span>`, `<span class="big-emo">${L[7]}</span><small>${L[5]}</small>`, L[1], L[6]]); }};
+ORDERS.bnVowels = {title:'Put the first Bangla vowels in order', items:() => BN_VOWELS.slice(0, 6).map(L => [`<span class="glyph bn">${L[0]}</span>`, L[2]])};
+ORDERS.arOrder = {title:'Put these Arabic letters in order (start on the right!)', items:() => { const s = rand(0, 23); return AR_LETTERS.slice(s, s + 5).map(L => [`<span class="glyph ar">${L[0]}</span>`, L[1]]); }};
+playNames.alphabets = 'Find the letter';
+function alphaFindPlay(){
+  const z = document.getElementById('playZone'); if (!z) return;
+  const isAr = Math.random() < .5, list = isAr ? AR_LETTERS : [...BN_VOWELS, ...BN_CONS], t = pick(list), opts = shuffle([t, ...shuffle(list.filter(x => x !== t)).slice(0, 3)]);
+  const sayIt = () => isAr ? speakIn('ar', t[2], `Find ${t[1]}. Like ${t[5]}, ${t[6]}.`) : speakIn('bn', t[0], `Find ${t[2]}. Like ${t[4]}, ${t[5]}.`);
+  z.innerHTML = `<div class="question"><button class="speak-btn" id="afSay">🔊</button><h2>Find the ${isAr ? 'Arabic' : 'Bangla'} letter <span style="color:var(--purple)">${esc(t[1])}</span> <span class="big-emo">${isAr ? t[7] : t[6]}</span></h2></div>
+    <div class="choice-grid">${opts.map((o, k) => `<button class="choice" data-k="${k}"><span class="glyph ${isAr ? 'ar' : 'bn'}">${o[0]}</span></button>`).join('')}</div><p id="playFeedback" class="feedback"></p><button id="playNext" class="btn big" onclick="alphaFindPlay()">Next letter →</button>`;
+  z.querySelector('#afSay').onclick = sayIt;
+  let done = false;
+  z.querySelectorAll('.choice').forEach(b => b.onclick = () => { if (done) return; const o = opts[+b.dataset.k]; if (o === t){ done = true; b.classList.add('good'); playWin('alphabets', b); } else { b.classList.add('bad'); b.disabled = true; playMiss('Look again!'); } });
+  sayIt();
+}
+GEN.alphabets = [
+  ['bangla letters', () => { const all = [...BN_VOWELS, ...BN_CONS], t = pick(all); return {q:`Which letter is this?`, html:`<div class="q-glyph bn">${t[0]}</div>`, say:'Which Bangla letter is this?', choices:[t[1], ...shuffle(all.filter(x => x !== t && x[1] !== t[1])).slice(0, 2).map(x => x[1])], a:t[1], explain:`That is ${t[1]}, like ${t[4]}, ${t[5]}.`}; }],
+  ['bangla words', () => { const all = [...BN_VOWELS, ...BN_CONS.slice(0, 32)], t = pick(all); return {q:`Which letter does ${t[6]} ${t[4]} (${t[5]}) start with?`, html:`<div class="q-glyph bn" style="font-size:44px">${t[3]}</div>`, choices:[t[0], ...shuffle(all.filter(x => x !== t)).slice(0, 2).map(x => x[0])], a:t[0], explain:`${t[4]} starts with ${t[0]}.`}; }],
+  ['arabic letters', () => { const t = pick(AR_LETTERS); return {q:'Which Arabic letter is this?', html:`<div class="q-glyph ar">${t[0]}</div>`, choices:[t[1], ...shuffle(AR_LETTERS.filter(x => x !== t)).slice(0, 2).map(x => x[1])], a:t[1], explain:`That is ${t[1]}, like ${t[5]}, ${t[6]}.`}; }],
+  ['arabic words', () => { const t = pick(AR_LETTERS); return {q:`Which letter does ${t[7]} ${t[5]} (${t[6]}) start with?`, html:`<div class="q-glyph ar" style="font-size:48px">${t[4]}</div>`, choices:[t[0], ...shuffle(AR_LETTERS.filter(x => x !== t)).slice(0, 2).map(x => x[0])], a:t[0], explain:`${t[5]} starts with ${t[1]}.`}; }],
+  ['numbers', () => { const bn = Math.random() < .5, list = bn ? BN_NUMS : AR_NUMS, i = rand(1, 9); return {q:`Which ${bn ? 'Bangla' : 'Arabic'} number is ${i}?`, choices:[list[i][0], list[(i + 3) % 10][0], list[(i + 6) % 10][0]], a:list[i][0], explain:`${list[i][0]} is ${i}, said “${list[i][1]}”.`}; }]
+];
+
+/* ---------- router: moves between subjects without reloading the page ---------- */
+function parseLocation(){
+  const file = (location.pathname.split('/').pop() || '').replace(/\.html$/, '');
+  const key = !file || file === 'index' ? '' : file;
+  const p = new URLSearchParams(location.search), extra = {};
+  p.forEach((v, k) => { if (k !== 'mode') extra[k] = v; });
+  return {key, mode:p.get('mode') || 'subject', extra};
+}
+function dispatchRoute(key, mode, extra){
+  if (!key || !subjects.some(s => s.key === key)){
+    if (mode === 'routine') return renderRoutine();
+    if (mode === 'stickers') return renderStickerBook();
+    return renderHome();
+  }
+  if (mode === 'learn') return renderLearn(key);
+  if (mode === 'quiz') return renderQuiz(key);
+  if (mode === 'play') return renderPlay(key, extra.game);
+  if (mode === 'story' && key === 'reading') return renderStory(Math.max(0, Math.min(illustratedStories.length - 1, Number(extra.index) || 0)));
+  return renderSubject(key);
+}
+function routeTo(key, mode = 'subject', extra = {}, push = true){
+  stopSpeaking();
+  if (typeof Listen !== 'undefined') Listen.stop();
+  pageKey = key; document.body.dataset.subject = key;
+  if (push){
+    const qs = mode !== 'subject' ? '?' + new URLSearchParams({mode, ...extra}) : '';
+    try{ history.pushState({key, mode, extra}, '', (key || 'index') + '.html' + qs); }catch(e){}
+  }
+  document.title = key && subjects.some(s => s.key === key) ? `${subj(key).title} | Ruhaimah’s Learning World` : 'Ruhaimah’s Learning World';
+  dispatchRoute(key, mode, extra);
+}
+window.addEventListener('popstate', e => { const st = e.state || parseLocation(); routeTo(st.key || '', st.mode || 'subject', st.extra || {}, false); });
+
 /* ---------- start ---------- */
 Voice.init();
 saveAll();
 (function boot(){
-  const p = new URLSearchParams(location.search), mode = p.get('mode');
-  if (!pageKey) return mode === 'routine' ? renderRoutine() : mode === 'stickers' ? renderStickerBook() : renderHome();
-  if (!subjects.some(s => s.key === pageKey)) return renderHome();
-  if (mode === 'learn') return renderLearn(pageKey);
-  if (mode === 'quiz') return renderQuiz(pageKey);
-  if (mode === 'play') return renderPlay(pageKey);
-  if (mode === 'story' && pageKey === 'reading') return renderStory(Number(p.get('index')) || 0);
-  renderSubject(pageKey);
+  const st = parseLocation();
+  try{ history.replaceState(st, ''); }catch(e){}
+  routeTo(st.key, st.mode, st.extra, false);
 })();
